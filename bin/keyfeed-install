@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Wire keyfeed.lua into the Hyprland config, or take it back out.
+#
+# This is the only part of the plugin that touches a file you own, so it is a
+# command you run on purpose rather than something the plugin does when it
+# loads. It appends exactly one guarded line and removes exactly that line.
+set -euo pipefail
+
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LUA="$PLUGIN_DIR/keyfeed.lua"
+CONFIG="${HYPRLAND_CONFIG:-$HOME/.config/hypr/hyprland.lua}"
+MARKER="-- sterre.keyboard-hud"
+
+usage() {
+  cat <<EOF
+usage: keyfeed-install [--uninstall|--status]
+
+  (no flags)   add the key feed to $CONFIG
+  --uninstall  remove it again
+  --status     say whether it is installed
+EOF
+}
+
+installed() {
+  [ -f "$CONFIG" ] && grep -qF -- "$MARKER" "$CONFIG"
+}
+
+case "${1:-install}" in
+  --status)
+    if installed; then
+      echo "installed in $CONFIG"
+    else
+      echo "not installed"
+    fi
+    exit 0
+    ;;
+  --uninstall)
+    if ! installed; then
+      echo "not installed, nothing to do"
+      exit 0
+    fi
+    cp "$CONFIG" "$CONFIG.bak.$(date +%s)"
+    # Delete the marker line and the dofile line that follows it. The result is
+    # copied back rather than moved, because mv would bring mktemp's 0600 with
+    # it and quietly change the mode of a config file that was not ours.
+    tmp="$(mktemp)"
+    awk -v marker="$MARKER" '
+      $0 == marker { skip = 2; next }
+      skip > 0 { skip--; next }
+      { print }
+    ' "$CONFIG" > "$tmp"
+    cat "$tmp" > "$CONFIG"
+    rm -f "$tmp"
+    hyprctl reload >/dev/null 2>&1 || true
+    echo "removed from $CONFIG, a backup is beside it"
+    echo "the shell keeps running; the feed simply stops updating"
+    exit 0
+    ;;
+  --help|-h)
+    usage
+    exit 0
+    ;;
+  install)
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
+
+if [ ! -f "$LUA" ]; then
+  echo "cannot find $LUA" >&2
+  exit 1
+fi
+
+if [ ! -f "$CONFIG" ]; then
+  echo "cannot find $CONFIG" >&2
+  exit 1
+fi
+
+if installed; then
+  echo "already installed in $CONFIG"
+  exit 0
+fi
+
+cp "$CONFIG" "$CONFIG.bak.$(date +%s)"
+printf '\n%s\n%s\n' "$MARKER" "dofile(\"$LUA\")" >> "$CONFIG"
+hyprctl reload >/dev/null 2>&1 || true
+
+echo "added to $CONFIG"
+echo
+echo "Hyprland now sends every keypress, from every window, to that script."
+echo "The strip defaults to chords, which drops plain typing without writing"
+echo "it anywhere, and the map is off until you turn it on. Only keycodes are"
+echo "written, only into \$XDG_RUNTIME_DIR, mode 0700, cleared at logout."
+echo
+echo "Undo with: $0 --uninstall"

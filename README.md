@@ -1,7 +1,130 @@
 # omarchy-keyboard-hud
 
-An Omarchy shell plugin: an on screen key strip and keyboard map for
-screencasts and pairing, stacked in either order, labelled from the keyboard
-layout you actually have loaded.
+Two ways of showing what you are typing, in one plugin: a **strip** of the keys
+and chords you just pressed, and a **map** of the whole keyboard that lights up
+the keys you are holding.
 
-The plugin itself lands in the first pull request against this repository.
+They stack, in either order, so you can have the chord names above the board or
+below it. Either half can be off.
+
+The map is labelled from the keyboard layout you actually have loaded. On a
+colemak machine it reads colemak, on a dvorak machine it reads dvorak, and the
+key positions stay where they physically are.
+
+This replaces two earlier plugins of mine, `omarchy-key-visualizer` and
+`omarchy-keyboard-minimap`, which did one half each and could not be stacked
+because neither knew the other existed.
+
+## Read this before installing
+
+While either half is on, this plugin is being handed **every keypress from
+every window**, including keys typed into password prompts. That is what an on
+screen keyboard is, and there is no version of it that watches only the
+interesting keys.
+
+What this one does about it:
+
+- **The strip defaults to chords**, which means a plain character key with no
+  modifier held is dropped inside [keyfeed.lua](keyfeed.lua) and never written
+  anywhere. Modifier combinations get through, as do keys that carry no text of
+  their own: arrows, Escape, Tab, the function row.
+- **The map is off until you turn it on**, and it is the half that necessarily
+  sees everything, because "which keys are held" is what it draws.
+- **Turning something off stops the recording**, not just the drawing. The Lua
+  side re-reads the config on every event and writes nothing it is not asked
+  for.
+- **Only keycodes are written, never characters**, and only into
+  `$XDG_RUNTIME_DIR`, which systemd creates as mode 0700 and wipes at logout.
+  Nothing is kept between sessions and nothing leaves the machine.
+- **The feed is inert until you wire it in** with a command you run on purpose,
+  and `bin/keyfeed-install --uninstall` takes it back out.
+
+Right clicking the bar button turns both halves off in one go. That is the
+thing to reach for before typing a password on a shared screen.
+
+## Install
+
+```sh
+omarchy plugin add https://github.com/sterre-g/omarchy-keyboard-hud.git --enable
+omarchy plugin enable sterre.keyboard-hud --section right
+~/.config/omarchy/plugins/sterre.keyboard-hud/bin/keyfeed-install
+```
+
+The last command appends two lines to `~/.config/hypr/hyprland.lua`, keeps a
+timestamped backup beside it, and reloads Hyprland. Check or undo with
+`bin/keyfeed-install --status` and `--uninstall`.
+
+## Using it
+
+Left click the bar button for the panel, right click to turn everything off and
+on again. The panel sets the strip mode, the map, which of the two sits on top,
+where on screen they sit, and how big the map is.
+
+Keys in the panel: `c` chords, `a` everything, `s` strip off, `m` map,
+`o` swap the order, `x` all off.
+
+```sh
+omarchy-shell sterre.keyboard-hud status
+omarchy-shell sterre.keyboard-hud strip chords     # chords, all, off
+omarchy-shell sterre.keyboard-hud map on           # on, off
+omarchy-shell sterre.keyboard-hud order strip-below
+omarchy-shell sterre.keyboard-hud off
+```
+
+## Following your layout
+
+The map draws physical key positions, which do not move, and asks the system
+what each one currently produces:
+
+```sh
+hyprctl -j devices                  # which keyboard, which layout and variant
+xkbcli compile-keymap --layout us --variant colemak_dh_wide_iso
+```
+
+The compiled keymap is parsed for `<AD01> = 24` style keycodes and their symbol
+lists, so the labels come from the same source Hyprland is using rather than
+from a table per layout shipped in here. A layout switch or a config reload
+re-reads it.
+
+One wrinkle worth knowing: the keyboard Hyprland marks as `main` is often an
+input method's virtual keyboard, which carries no variant. The plugin prefers a
+real device that has one, and you can override both with the `layout` and
+`variant` settings if it still picks wrong. The name of whatever it settled on
+is printed under the map.
+
+If the keymap cannot be read, the map falls back to US labels rather than
+showing nothing.
+
+## How it works
+
+[keyfeed.lua](keyfeed.lua) is the only thing that sees your keys. It tracks
+which are held, decides per event what is allowed out, and writes one small
+JSON object to `$XDG_RUNTIME_DIR/sterre-keyboard-hud.json`: the chord for the
+strip, the held set for the map, each only if that half is on.
+
+[Overlay.qml](Overlay.qml) watches that file and draws both cards, one
+`PanelWindow` per screen, never taking keyboard focus so it can sit there while
+you type into something else. [Panel.qml](Panel.qml) is the bar widget and
+writes the settings the Lua side reads back.
+
+[Model.js](Model.js) holds the physical layout, the keymap parser, chord
+ordering, repeat collapsing and expiry, and the layout picking. It is covered by
+[test/model.test.js](test/model.test.js) against two real compiled keymaps
+checked in as fixtures, including a test that qwerty and colemak genuinely
+produce different labels for the same keycodes.
+
+## Development
+
+```sh
+./run-tests
+./dev-sync
+omarchy plugin validate ~/.config/omarchy/plugins/sterre.keyboard-hud
+omarchy-shell shell rescanPlugins
+```
+
+Editing the overlay hot reloads. Adding a new file to an installed plugin needs
+`omarchy restart shell`, otherwise Qt serves a cached directory listing.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

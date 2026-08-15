@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "sterre.keyboard-hud",
+  "name": "Keyboard HUD",
+  "version": "0.1.0",
+  "author": "sterre-g",
+  "license": "MIT",
+  "description": "On screen key strip and keyboard map for screencasts, stacked in either order and labelled from your actual keyboard layout.",
+  "kinds": [
+    "bar-widget",
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "Panel.qml",
+    "overlay": "Overlay.qml"
+  },
+  "barWidget": {
+    "displayName": "Keyboard HUD",
+    "description": "Key strip and keyboard map, for screencasts and pairing",
+    "category": "Input",
+    "aliases": [
+      "keys",
+      "key-visualizer",
+      "keyboard-minimap"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "strip": "chords",
+      "map": false,
+      "order": "strip-above",
+      "position": "bottom",
+      "scale": 1,
+      "lingerMs": 2000,
+      "historyCount": 4,
+      "layout": "",
+      "variant": ""
+    },
+    "schema": [
+      {
+        "key": "strip",
+        "type": "enum",
+        "label": "Key strip",
+        "options": [
+          "chords",
+          "all",
+          "off"
+        ],
+        "description": "chords shows modifier combinations and keys that carry no text. all shows everything you type, including into password fields.",
+        "defaultValue": "chords"
+      },
+      {
+        "key": "map",
+        "type": "boolean",
+        "label": "Show the keyboard map",
+        "description": "While this is on, every key you press lights up on screen.",
+        "defaultValue": false
+      },
+      {
+        "key": "order",
+        "type": "enum",
+        "label": "Key strip position",
+        "options": [
+          "strip-above",
+          "strip-below"
+        ],
+        "defaultValue": "strip-above"
+      },
+      {
+        "key": "position",
+        "type": "enum",
+        "label": "Where on screen",
+        "options": [
+          "bottom",
+          "top",
+          "center"
+        ],
+        "defaultValue": "bottom"
+      },
+      {
+        "key": "scale",
+        "type": "enum",
+        "label": "Map size",
+        "options": [
+          "0.75",
+          "1",
+          "1.25",
+          "1.5"
+        ],
+        "defaultValue": "1"
+      },
+      {
+        "key": "lingerMs",
+        "type": "integer",
+        "label": "How long a key stays on the strip (ms)",
+        "min": 300,
+        "max": 10000,
+        "step": 100,
+        "defaultValue": 2000
+      },
+      {
+        "key": "historyCount",
+        "type": "integer",
+        "label": "How many keys to keep on the strip",
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "defaultValue": 4
+      },
+      {
+        "key": "layout",
+        "type": "string",
+        "label": "Layout override, e.g. us. Blank follows the keyboard.",
+        "defaultValue": ""
+      },
+      {
+        "key": "variant",
+        "type": "string",
+        "label": "Variant override, e.g. colemak_dh_wide_iso",
+        "defaultValue": ""
+      }
+    ]
+  }
+}
