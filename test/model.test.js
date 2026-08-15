@@ -206,6 +206,22 @@ run("the keyboard to follow is a real one, not the input method's virtual pair",
   assert.equal(M.pickKeyboard(null), null)
 })
 
+run("forcing qwerty overrides the detected layout, and off restores it", () => {
+  const keyboard = { name: "kb", layout: "us", variant: "colemak_dh_wide_iso" }
+
+  assert.deepEqual(M.overrideFrom(true, "", ""), M.QWERTY_OVERRIDE)
+  assert.deepEqual(M.overrideFrom(true, "de", "nodeadkeys"), M.QWERTY_OVERRIDE,
+    "forced qwerty beats a manual override too")
+  assert.equal(M.overrideFrom(false, "", ""), null)
+  assert.deepEqual(M.overrideFrom(false, "de", "nodeadkeys"), { layout: "de", variant: "nodeadkeys" })
+
+  assert.deepEqual(M.keymapCommand(keyboard, M.overrideFrom(true, "", "")),
+    ["xkbcli", "compile-keymap", "--layout", "us"])
+  assert.deepEqual(M.keymapCommand(keyboard, M.overrideFrom(false, "", "")),
+    ["xkbcli", "compile-keymap", "--layout", "us", "--variant", "colemak_dh_wide_iso"])
+  assert.equal(M.layoutName(keyboard, M.overrideFrom(true, "", "")), "us")
+})
+
 run("the compile command follows the keyboard, and an override wins", () => {
   const keyboard = { name: "kb", layout: "us", variant: "colemak_dh_wide_iso" }
   assert.deepEqual(M.keymapCommand(keyboard, null),

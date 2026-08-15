@@ -20,6 +20,7 @@ Panel {
   property string order: Model.normalizeOrder(root.setting("order", "strip-above"))
   property string position: Model.normalizePosition(root.setting("position", "bottom"))
   property real mapScale: Model.normalizeScale(root.setting("scale", 1))
+  property bool forceQwerty: Model.normalizeBool(root.setting("qwerty", false))
   property bool feedInstalled: false
   property string detectedLayout: ""
 
@@ -48,6 +49,7 @@ Panel {
       scale: root.mapScale,
       lingerMs: Math.max(300, Math.min(10000, Number(root.setting("lingerMs", 2000)))),
       historyCount: Math.max(1, Math.min(10, Number(root.setting("historyCount", 4)))),
+      qwerty: root.forceQwerty,
       layout: String(root.setting("layout", "")),
       variant: String(root.setting("variant", ""))
     }, null, 2) + "\n")
@@ -68,6 +70,13 @@ Panel {
     root.order = Model.normalizeOrder(data.order)
     root.position = Model.normalizePosition(data.position)
     root.mapScale = Model.normalizeScale(data.scale)
+    root.forceQwerty = Model.normalizeBool(data.qwerty)
+  }
+
+  function setQwerty(value) {
+    root.forceQwerty = value === true
+    root.writeConfig()
+    devices.running = true
   }
 
   function setStrip(value) {
@@ -113,9 +122,8 @@ Panel {
       return
     }
     var keyboard = Model.pickKeyboard(data && data.keyboards ? data.keyboards : [])
-    var override = String(root.setting("layout", "")) === ""
-      ? null
-      : { layout: String(root.setting("layout", "")), variant: String(root.setting("variant", "")) }
+    var override = Model.overrideFrom(root.forceQwerty,
+      String(root.setting("layout", "")), String(root.setting("variant", "")))
     root.detectedLayout = Model.layoutName(keyboard, override)
   }
 
@@ -131,6 +139,7 @@ Panel {
     root.order = Model.normalizeOrder(root.setting("order", "strip-above"))
     root.position = Model.normalizePosition(root.setting("position", "bottom"))
     root.mapScale = Model.normalizeScale(root.setting("scale", 1))
+    root.forceQwerty = Model.normalizeBool(root.setting("qwerty", false))
     root.writeConfig()
   }
 
@@ -186,6 +195,10 @@ Panel {
     function map(value: string): string {
       root.setMap(value === "on" || value === "true" || value === "1")
       return root.map ? "on" : "off"
+    }
+    function qwerty(value: string): string {
+      root.setQwerty(value === "on" || value === "true" || value === "1")
+      return root.forceQwerty ? "on" : "off"
     }
     function order(value: string): string {
       root.setOrder(value)
@@ -244,6 +257,7 @@ Panel {
         else if (t === "m") root.setMap(!root.map)
         else if (t === "o") root.setOrder(Model.stripAbove(root.order) ? "strip-below" : "strip-above")
         else if (t === "x") root.turnOff()
+        else if (t === "q") root.setQwerty(!root.forceQwerty)
       }
 
       Flickable {
@@ -433,10 +447,44 @@ Panel {
             foreground: root.foreground
           }
 
+          PanelSectionHeader {
+            width: parent.width
+            text: "Labels"
+            foreground: root.dim
+            fontFamily: root.fontFamily
+          }
+
+          Row {
+            spacing: Style.spacing.controlGap
+
+            Button {
+              text: "Your layout"
+              tooltipText: "Label the map from the keyboard layout you are actually using"
+              bordered: true
+              selected: !root.forceQwerty
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              onClicked: root.setQwerty(false)
+            }
+
+            Button {
+              text: "Qwerty"
+              tooltipText: "Draw a qwerty board regardless, which is what most viewers expect"
+              bordered: true
+              selected: root.forceQwerty
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              onClicked: root.setQwerty(true)
+            }
+          }
+
           Text {
             width: parent.width
             text: "Layout: " + (root.detectedLayout === "" ? "detecting" : root.detectedLayout)
-              + "\nc chords, a everything, s strip off, m map, o order, x all off"
+              + (root.forceQwerty ? "  (forced qwerty)" : "")
+              + "\nc chords, a everything, s strip off, m map, o order, q qwerty, x all off"
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
             color: root.dim

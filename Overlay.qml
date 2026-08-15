@@ -31,6 +31,7 @@ Item {
   property int historyCount: 4
   property string overrideLayout: ""
   property string overrideVariant: ""
+  property bool forceQwerty: false
 
   // Labels come from the keymap the user actually has loaded, so the map reads
   // colemak on a colemak machine without shipping a table per layout.
@@ -70,9 +71,12 @@ Item {
 
     var nextLayout = String(data.layout || "")
     var nextVariant = String(data.variant || "")
-    if (nextLayout !== root.overrideLayout || nextVariant !== root.overrideVariant) {
+    var nextQwerty = Model.normalizeBool(data.qwerty)
+    if (nextLayout !== root.overrideLayout || nextVariant !== root.overrideVariant
+      || nextQwerty !== root.forceQwerty) {
       root.overrideLayout = nextLayout
       root.overrideVariant = nextVariant
+      root.forceQwerty = nextQwerty
       root.detectLayout()
     }
 
@@ -92,8 +96,7 @@ Item {
   }
 
   function overrideSpec() {
-    if (root.overrideLayout === "") return null
-    return { layout: root.overrideLayout, variant: root.overrideVariant }
+    return Model.overrideFrom(root.forceQwerty, root.overrideLayout, root.overrideVariant)
   }
 
   function detectLayout() {
@@ -342,7 +345,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Style.spacing.xs
-        text: root.keymapName
+        text: root.forceQwerty ? root.keymapName + "  (forced qwerty)" : root.keymapName
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.caption
         color: Qt.darker(Color.menu.text, 1.8)

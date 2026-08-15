@@ -35,7 +35,8 @@
       "lingerMs": 2000,
       "historyCount": 4,
       "layout": "",
-      "variant": ""
+      "variant": "",
+      "qwerty": false
     },
     "schema": [
       {
@@ -107,6 +108,13 @@
         "max": 10,
         "step": 1,
         "defaultValue": 4
+      },
+      {
+        "key": "qwerty",
+        "type": "boolean",
+        "label": "Always draw a qwerty board",
+        "description": "Off follows the layout you are actually using. On is for demoing to people who read qwerty.",
+        "defaultValue": false
       },
       {
         "key": "layout",

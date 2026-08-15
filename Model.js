@@ -282,6 +282,18 @@ function stripAbove(order) {
   return normalizeOrder(order) === "strip-above"
 }
 
+// Forcing qwerty is a first class choice rather than a layout override the
+// user has to spell out, because "show it the way everyone else sees it" is
+// the common case when demoing to other people.
+var QWERTY_OVERRIDE = { layout: "us", variant: "" }
+
+function overrideFrom(forceQwerty, layout, variant) {
+  if (forceQwerty === true) return QWERTY_OVERRIDE
+  var name = String(layout || "")
+  if (name === "") return null
+  return { layout: name, variant: String(variant || "") }
+}
+
 // Which keyboard the labels should follow. The main device is often a virtual
 // keyboard belonging to an input method, which carries no variant, so a real
 // device with a variant is the better answer when there is one.
@@ -350,6 +362,8 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeBool: normalizeBool,
     normalizeScale: normalizeScale,
     stripAbove: stripAbove,
+    QWERTY_OVERRIDE: QWERTY_OVERRIDE,
+    overrideFrom: overrideFrom,
     pickKeyboard: pickKeyboard,
     keymapCommand: keymapCommand,
     layoutName: layoutName
