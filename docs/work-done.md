@@ -15,3 +15,7 @@
   override available.
 - Both halves are gated in lua rather than in QML: the strip drops plain typing
   in its default chords mode, and the map records nothing until it is on.
+- Fixed before merge: the overlay had no input region, so while the map was on
+  its full width strip swallowed every click inside it, including on the bar
+  underneath. `mask: Region {}` makes it click through, which is what the first
+  party OSD does for the same reason.

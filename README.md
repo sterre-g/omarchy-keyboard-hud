@@ -104,7 +104,9 @@ strip, the held set for the map, each only if that half is on.
 
 [Overlay.qml](Overlay.qml) watches that file and draws both cards, one
 `PanelWindow` per screen, never taking keyboard focus so it can sit there while
-you type into something else. [Panel.qml](Panel.qml) is the bar widget and
+you type into something else, and with an empty input region so it never takes
+a click either. Both matter: it is a full width strip along an edge, so without
+that it would cover whatever the bar has there. [Panel.qml](Panel.qml) is the bar widget and
 writes the settings the Lua side reads back.
 
 [Model.js](Model.js) holds the physical layout, the keymap parser, chord

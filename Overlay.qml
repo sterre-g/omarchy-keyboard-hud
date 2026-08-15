@@ -182,6 +182,10 @@ Item {
       WlrLayershell.layer: WlrLayer.Overlay
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
       exclusionMode: ExclusionMode.Ignore
+      // Visual only. Without an empty input region this surface swallows every
+      // click inside it, and it is a full width strip along an edge, so it
+      // covers whatever the bar has there. It is a caption, not a UI.
+      mask: Region {}
 
       anchors {
         top: root.position !== "bottom"
