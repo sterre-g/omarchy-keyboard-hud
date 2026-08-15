@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+id="$(jq -r .id manifest.json)"
+dest="$HOME/.config/omarchy/plugins/$id"
+mkdir -p "$dest"
+rsync -a --delete --exclude .git ./ "$dest/"
+echo "synced to $dest"
