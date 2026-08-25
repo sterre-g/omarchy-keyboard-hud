@@ -22,7 +22,10 @@ Panel {
   property real mapScale: Model.normalizeScale(root.setting("scale", 1))
   property bool forceQwerty: Model.normalizeBool(root.setting("qwerty", false))
   property bool feedInstalled: false
-  property bool settingsApplied: false
+  property bool settingsArrived: false
+  property bool configResolved: false
+  property bool configPresent: false
+  readonly property bool settingsApplied: root.settingsArrived && root.configResolved
   property string detectedLayout: ""
 
   readonly property bool anythingOn: root.strip !== "off" || root.map
@@ -72,12 +75,55 @@ Panel {
     } catch (e) {
       return
     }
+    if (!data || typeof data.strip === "undefined") return
     root.strip = Model.normalizeStrip(data.strip)
     root.map = Model.normalizeBool(data.map)
     root.order = Model.normalizeOrder(data.order)
     root.position = Model.normalizePosition(data.position)
     root.mapScale = Model.normalizeScale(data.scale)
     root.forceQwerty = Model.normalizeBool(data.qwerty)
+  }
+
+  function applyStoredSettings() {
+    root.strip = Model.normalizeStrip(root.setting("strip", "chords"))
+    root.map = Model.normalizeBool(root.setting("map", false))
+    root.order = Model.normalizeOrder(root.setting("order", "strip-above"))
+    root.position = Model.normalizePosition(root.setting("position", "bottom"))
+    root.mapScale = Model.normalizeScale(root.setting("scale", 1))
+    root.forceQwerty = Model.normalizeBool(root.setting("qwerty", false))
+  }
+
+  // The bar rebuilds its widgets from the settings it held at the last full
+  // shell start, so on a plugin reload what it injects here is stale, while the
+  // config file is whatever a live widget last wrote. The file is gone after a
+  // logout and present otherwise, which is exactly the test for which of the
+  // two is newer. Both arrive asynchronously, so decide only once both have,
+  // and write nothing until then.
+  function resolveState() {
+    if (!root.settingsApplied) return
+    if (!root.configPresent) root.applyStoredSettings()
+    root.writeConfig()
+    root.persistLiveState()
+  }
+
+  // A rebuild that took its values from the file leaves the stored copy behind,
+  // so push the live values back into shell.json rather than letting the two
+  // drift until the next full restart.
+  function persistLiveState() {
+    var live = {
+      strip: root.strip,
+      map: root.map,
+      order: root.order,
+      position: root.position,
+      scale: root.mapScale,
+      qwerty: root.forceQwerty
+    }
+    for (var key in live) {
+      if (root.setting(key, null) !== live[key]) {
+        root.persist(live)
+        return
+      }
+    }
   }
 
   // configPath is under XDG_RUNTIME_DIR, which systemd wipes at logout, and
@@ -153,14 +199,15 @@ Panel {
   }
 
   onSettingsChanged: {
-    root.settingsApplied = true
-    root.strip = Model.normalizeStrip(root.setting("strip", "chords"))
-    root.map = Model.normalizeBool(root.setting("map", false))
-    root.order = Model.normalizeOrder(root.setting("order", "strip-above"))
-    root.position = Model.normalizePosition(root.setting("position", "bottom"))
-    root.mapScale = Model.normalizeScale(root.setting("scale", 1))
-    root.forceQwerty = Model.normalizeBool(root.setting("qwerty", false))
-    root.writeConfig()
+    if (root.settingsApplied) {
+      // A later change is a real edit through the settings UI, not the stale
+      // snapshot the bar injects when it rebuilds the widget.
+      root.applyStoredSettings()
+      root.writeConfig()
+      return
+    }
+    root.settingsArrived = true
+    root.resolveState()
   }
 
   onOpenedChanged: if (opened) {
@@ -175,7 +222,21 @@ Panel {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.adoptConfig(text())
+    onLoaded: {
+      root.adoptConfig(text())
+      if (!root.configResolved) {
+        root.configPresent = true
+        root.configResolved = true
+        root.resolveState()
+      }
+    }
+    onLoadFailed: {
+      if (!root.configResolved) {
+        root.configPresent = false
+        root.configResolved = true
+        root.resolveState()
+      }
+    }
   }
 
   Timer {
@@ -223,6 +284,10 @@ Panel {
     function order(value: string): string {
       root.setOrder(value)
       return root.order
+    }
+    function position(value: string): string {
+      root.setPosition(value)
+      return root.position
     }
     function off(): string {
       root.turnOff()
@@ -415,7 +480,10 @@ Panel {
             fontFamily: root.fontFamily
           }
 
-          Row {
+          // Model.POSITIONS is in reading order, so three columns put each
+          // button where the cards will actually appear on screen.
+          Grid {
+            columns: 3
             spacing: Style.spacing.controlGap
 
             Repeater {

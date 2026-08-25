@@ -79,8 +79,26 @@ omarchy-shell sterre.keyboard-hud status
 omarchy-shell sterre.keyboard-hud strip chords     # chords, all, off
 omarchy-shell sterre.keyboard-hud map on           # on, off
 omarchy-shell sterre.keyboard-hud order strip-below
+omarchy-shell sterre.keyboard-hud position top-left
 omarchy-shell sterre.keyboard-hud off
 ```
+
+## Where it sits
+
+Nine places, the corners and the side edges as well as the middle:
+
+```
+top-left       top       top-right
+left          center          right
+bottom-left   bottom   bottom-right
+```
+
+The panel lays these out as a three by three grid, so the button you press sits
+where the cards will. `top`, `center` and `bottom` still mean the middle column,
+so a config from before this existed keeps drawing where it did.
+
+Both halves move together. The corners are the ones to reach for when you record
+with a webcam in one, or keep a bar along an edge.
 
 ## Following your layout
 
