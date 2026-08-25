@@ -250,7 +250,37 @@ function displayText(entry) {
 }
 
 var STRIP_MODES = ["chords", "all", "off"]
-var POSITIONS = ["bottom", "top", "center"]
+// The three original values are the middle column of the grid, so they keep
+// meaning exactly what they used to and an existing config needs no migration.
+var POSITIONS = [
+  "top-left", "top", "top-right",
+  "left", "center", "right",
+  "bottom-left", "bottom", "bottom-right"
+]
+
+var POSITION_PARTS = {
+  "top-left": { vertical: "top", horizontal: "left" },
+  "top": { vertical: "top", horizontal: "center" },
+  "top-right": { vertical: "top", horizontal: "right" },
+  "left": { vertical: "middle", horizontal: "left" },
+  "center": { vertical: "middle", horizontal: "center" },
+  "right": { vertical: "middle", horizontal: "right" },
+  "bottom-left": { vertical: "bottom", horizontal: "left" },
+  "bottom": { vertical: "bottom", horizontal: "center" },
+  "bottom-right": { vertical: "bottom", horizontal: "right" }
+}
+
+function positionParts(value) {
+  return POSITION_PARTS[normalizePosition(value)]
+}
+
+function positionVertical(value) {
+  return positionParts(value).vertical
+}
+
+function positionHorizontal(value) {
+  return positionParts(value).horizontal
+}
 var ORDERS = ["strip-above", "strip-below"]
 
 function normalizeStrip(value) {
@@ -374,6 +404,9 @@ if (typeof module !== "undefined" && module.exports) {
     displayText: displayText,
     normalizeStrip: normalizeStrip,
     normalizePosition: normalizePosition,
+    positionParts: positionParts,
+    positionVertical: positionVertical,
+    positionHorizontal: positionHorizontal,
     normalizeOrder: normalizeOrder,
     normalizeBool: normalizeBool,
     normalizeScale: normalizeScale,

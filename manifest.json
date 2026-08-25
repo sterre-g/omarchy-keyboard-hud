@@ -73,9 +73,15 @@
         "type": "enum",
         "label": "Where on screen",
         "options": [
-          "bottom",
+          "top-left",
           "top",
-          "center"
+          "top-right",
+          "left",
+          "center",
+          "right",
+          "bottom-left",
+          "bottom",
+          "bottom-right"
         ],
         "defaultValue": "bottom"
       },

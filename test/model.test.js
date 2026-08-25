@@ -187,6 +187,25 @@ run("settings normalise, including the stacking order", () => {
   assert.equal(M.normalizeScale("junk"), 1)
 })
 
+run("the nine positions split into a vertical and a horizontal half", () => {
+  assert.equal(M.POSITIONS.length, 9)
+  for (const name of M.POSITIONS) {
+    const parts = M.positionParts(name)
+    assert.ok(["top", "middle", "bottom"].includes(parts.vertical), name)
+    assert.ok(["left", "center", "right"].includes(parts.horizontal), name)
+  }
+  const seen = M.POSITIONS.map(p => M.positionVertical(p) + "/" + M.positionHorizontal(p))
+  assert.equal(new Set(seen).size, 9, "every cell of the grid is reachable exactly once")
+
+  // The three old values are the middle column, so an existing config keeps
+  // drawing where it did before this became a grid.
+  assert.deepEqual(M.positionParts("top"), { vertical: "top", horizontal: "center" })
+  assert.deepEqual(M.positionParts("center"), { vertical: "middle", horizontal: "center" })
+  assert.deepEqual(M.positionParts("bottom"), { vertical: "bottom", horizontal: "center" })
+  assert.equal(M.normalizePosition("bottom-right"), "bottom-right")
+  assert.equal(M.normalizePosition("sideways"), "bottom")
+})
+
 run("a persisted change keeps the settings the panel never touches", () => {
   const stored = {
     id: "sterre.keyboard-hud",

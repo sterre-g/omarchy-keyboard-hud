@@ -190,9 +190,14 @@ Item {
       // covers whatever the bar has there. It is a caption, not a UI.
       mask: Region {}
 
+      // The surface stays full width whatever the position is, so the cards can
+      // sit against either side without resizing the layer on every change.
+      readonly property string vertical: Model.positionVertical(root.position)
+      readonly property string horizontal: Model.positionHorizontal(root.position)
+
       anchors {
-        top: root.position !== "bottom"
-        bottom: root.position !== "top"
+        top: window.vertical !== "bottom"
+        bottom: window.vertical !== "top"
         left: true
         right: true
       }
@@ -201,31 +206,45 @@ Item {
 
       Column {
         id: stack
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: root.position === "center" ? parent.verticalCenter : undefined
-        anchors.bottom: root.position === "bottom" ? parent.bottom : undefined
-        anchors.top: root.position === "top" ? parent.top : undefined
-        anchors.margins: Style.space(20)
+
+        // The column spans the screen and each card places itself inside it.
+        // Sizing the column to its cards instead does not work: the cards
+        // anchor to its centre, so it resolves to full width anyway and moving
+        // it does nothing, which is why every position drew in the middle.
+        readonly property real edge: Style.space(20)
+        x: stack.edge
+        width: parent.width - stack.edge * 2
+
+        anchors.verticalCenter: window.vertical === "middle" ? parent.verticalCenter : undefined
+        anchors.bottom: window.vertical === "bottom" ? parent.bottom : undefined
+        anchors.top: window.vertical === "top" ? parent.top : undefined
+        anchors.margins: stack.edge
         spacing: Style.spacing.md
 
         // The strip and the map are the same two children in either order, so
         // "above" and "below" is one setting rather than two layouts.
         Loader {
-          anchors.horizontalCenter: parent.horizontalCenter
+          x: window.horizontal === "left" ? 0
+            : window.horizontal === "right" ? stack.width - width
+            : (stack.width - width) / 2
           active: root.showStrip && Model.stripAbove(root.order)
           visible: active
           sourceComponent: stripCard
         }
 
         Loader {
-          anchors.horizontalCenter: parent.horizontalCenter
+          x: window.horizontal === "left" ? 0
+            : window.horizontal === "right" ? stack.width - width
+            : (stack.width - width) / 2
           active: root.showMap
           visible: active
           sourceComponent: mapCard
         }
 
         Loader {
-          anchors.horizontalCenter: parent.horizontalCenter
+          x: window.horizontal === "left" ? 0
+            : window.horizontal === "right" ? stack.width - width
+            : (stack.width - width) / 2
           active: root.showStrip && !Model.stripAbove(root.order)
           visible: active
           sourceComponent: stripCard
