@@ -4,6 +4,8 @@ Two ways of showing what you are typing, in one plugin: a **strip** of the keys
 and chords you just pressed, and a **map** of the whole keyboard that lights up
 the keys you are holding.
 
+![The strip above the map, both labelled from a Colemak DH Wide ISO layout](screenshot.png)
+
 They stack, in either order, so you can have the chord names above the board or
 below it. Either half can be off.
 
@@ -11,9 +13,11 @@ The map is labelled from the keyboard layout you actually have loaded. On a
 colemak machine it reads colemak, on a dvorak machine it reads dvorak, and the
 key positions stay where they physically are.
 
-This replaces two earlier plugins of mine, `omarchy-key-visualizer` and
-`omarchy-keyboard-minimap`, which did one half each and could not be stacked
-because neither knew the other existed.
+It comes from two earlier plugins of mine, `omarchy-key-visualizer` for the
+strip and `omarchy-keyboard-minimap` for the map, both now archived. It has not
+drifted from either of them: each half still does what its own plugin did, and
+the only change is that one plugin holds both. That is what lets them stack,
+which they could not do while neither knew the other existed.
 
 ## Read this before installing
 
@@ -59,6 +63,8 @@ timestamped backup beside it, and reloads Hyprland. Check or undo with
 Left click the bar button for the panel, right click to turn everything off and
 on again. The panel sets the strip mode, the map, which of the two sits on top,
 where on screen they sit, and how big the map is.
+
+![The bar panel open, with the map still drawing behind it](screenshot-panel.png)
 
 Keys in the panel: `c` chords, `a` everything, `s` strip off, `m` map,
 `o` swap the order, `x` all off.
