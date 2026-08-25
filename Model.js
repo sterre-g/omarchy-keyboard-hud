@@ -282,6 +282,22 @@ function stripAbove(order) {
   return normalizeOrder(order) === "strip-above"
 }
 
+// The panel and the IPC change six of the ten settings. The other four are
+// only ever set from the settings UI, so a patch has to merge into whatever is
+// already stored rather than replace it, or turning the map off would silently
+// reset someone's lingerMs and layout override.
+function settingsWith(current, patch) {
+  var entry = {}
+  var key
+  for (key in current) {
+    if (key !== "id") entry[key] = current[key]
+  }
+  for (key in patch) {
+    if (key !== "id") entry[key] = patch[key]
+  }
+  return entry
+}
+
 // Forcing qwerty is a first class choice rather than a layout override the
 // user has to spell out, because "show it the way everyone else sees it" is
 // the common case when demoing to other people.
@@ -362,6 +378,7 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeBool: normalizeBool,
     normalizeScale: normalizeScale,
     stripAbove: stripAbove,
+    settingsWith: settingsWith,
     QWERTY_OVERRIDE: QWERTY_OVERRIDE,
     overrideFrom: overrideFrom,
     pickKeyboard: pickKeyboard,

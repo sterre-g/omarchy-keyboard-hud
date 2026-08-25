@@ -22,6 +22,7 @@ Panel {
   property real mapScale: Model.normalizeScale(root.setting("scale", 1))
   property bool forceQwerty: Model.normalizeBool(root.setting("qwerty", false))
   property bool feedInstalled: false
+  property bool settingsApplied: false
   property string detectedLayout: ""
 
   readonly property bool anythingOn: root.strip !== "off" || root.map
@@ -40,7 +41,13 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
+  // Bar.injectProps assigns settings through a Qt.callLater, so a freshly
+  // built widget runs its own Component.onCompleted before it has been told
+  // anything. Writing then would publish the manifest defaults over a config
+  // the running shell has been keeping correct, which is what made a plugin
+  // reload turn the HUD back on.
   function writeConfig() {
+    if (!root.settingsApplied) return
     config.setText(JSON.stringify({
       strip: root.strip,
       map: root.map,
@@ -73,41 +80,54 @@ Panel {
     root.forceQwerty = Model.normalizeBool(data.qwerty)
   }
 
+  // configPath is under XDG_RUNTIME_DIR, which systemd wipes at logout, and
+  // Component.onCompleted rebuilds it from the stored settings. So a change
+  // made here that is not written back to shell.json survives until the next
+  // reload and is then replaced by the manifest default. Turning the HUD off
+  // before a reboot and finding it recording again after login is that bug.
+  function persist(patch) {
+    var entry = Model.settingsWith(root.settings, patch)
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    root.writeConfig()
+  }
+
   function setQwerty(value) {
     root.forceQwerty = value === true
-    root.writeConfig()
+    root.persist({ qwerty: root.forceQwerty })
     devices.running = true
   }
 
   function setStrip(value) {
     root.strip = Model.normalizeStrip(value)
-    root.writeConfig()
+    root.persist({ strip: root.strip })
   }
 
   function setMap(value) {
     root.map = value === true
-    root.writeConfig()
+    root.persist({ map: root.map })
   }
 
   function setOrder(value) {
     root.order = Model.normalizeOrder(value)
-    root.writeConfig()
+    root.persist({ order: root.order })
   }
 
   function setPosition(value) {
     root.position = Model.normalizePosition(value)
-    root.writeConfig()
+    root.persist({ position: root.position })
   }
 
   function setScale(value) {
     root.mapScale = Model.normalizeScale(value)
-    root.writeConfig()
+    root.persist({ scale: root.mapScale })
   }
 
   function turnOff() {
     root.strip = "off"
     root.map = false
-    root.writeConfig()
+    root.persist({ strip: "off", map: false })
   }
 
   function checkFeed() {
@@ -128,12 +148,12 @@ Panel {
   }
 
   Component.onCompleted: {
-    root.writeConfig()
     root.checkFeed()
     devices.running = true
   }
 
   onSettingsChanged: {
+    root.settingsApplied = true
     root.strip = Model.normalizeStrip(root.setting("strip", "chords"))
     root.map = Model.normalizeBool(root.setting("map", false))
     root.order = Model.normalizeOrder(root.setting("order", "strip-above"))

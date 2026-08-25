@@ -37,6 +37,11 @@ What this one does about it:
 - **Turning something off stops the recording**, not just the drawing. The Lua
   side re-reads the config on every event and writes nothing it is not asked
   for.
+- **Off stays off.** Every switch in the panel is written to this plugin's entry
+  in `~/.config/omarchy/shell.json`, so what you last chose is what you get back
+  after a reboot, a shell restart or a plugin reload. Between Hyprland starting
+  and the bar writing its config there is no config at all, and
+  [keyfeed.lua](keyfeed.lua) records nothing while that is true.
 - **Only keycodes are written, never characters**, and only into
   `$XDG_RUNTIME_DIR`, which systemd creates as mode 0700 and wipes at logout.
   Nothing is kept between sessions and nothing leaves the machine.
