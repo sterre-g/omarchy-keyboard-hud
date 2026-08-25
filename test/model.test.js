@@ -187,6 +187,29 @@ run("settings normalise, including the stacking order", () => {
   assert.equal(M.normalizeScale("junk"), 1)
 })
 
+run("a persisted change keeps the settings the panel never touches", () => {
+  const stored = {
+    id: "sterre.keyboard-hud",
+    strip: "chords",
+    map: true,
+    lingerMs: 4000,
+    historyCount: 8,
+    variant: "colemak_dh_wide_iso"
+  }
+  const next = M.settingsWith(stored, { strip: "off", map: false })
+
+  assert.equal(next.strip, "off")
+  assert.equal(next.map, false)
+  assert.equal(next.lingerMs, 4000, "lingerMs is settings UI only and must survive")
+  assert.equal(next.historyCount, 8)
+  assert.equal(next.variant, "colemak_dh_wide_iso")
+  assert.ok(!("id" in next), "updateEntryInline supplies the canonical id itself")
+
+  assert.deepEqual(M.settingsWith(undefined, { map: true }), { map: true })
+  assert.deepEqual(M.settingsWith({ map: true }, {}), { map: true })
+  assert.deepEqual(stored.strip, "chords", "the stored object is not mutated")
+})
+
 run("the keyboard to follow is a real one, not the input method's virtual pair", () => {
   const keyboards = [
     { name: "hl-virtual-keyboard-fcitx5", layout: "us", variant: "", main: true },

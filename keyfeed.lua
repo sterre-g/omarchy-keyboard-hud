@@ -47,9 +47,14 @@ local held = {}
 
 -- The bar widget writes this file. Lua has no json parser and needs only the
 -- two fields that decide what may be recorded.
+-- No file means the shell has not written one yet. That window is real and it
+-- is seconds long: XDG_RUNTIME_DIR is wiped at logout, so between Hyprland
+-- loading this script and the bar widget starting there is no config at all.
+-- Recording nothing is the only default that cannot outlive what the user last
+-- chose, and the HUD has nothing to draw on until the shell is up anyway.
 local function read_conf()
   local file = io.open(conf_path, "r")
-  if not file then return "chords", false end
+  if not file then return "off", false end
   local text = file:read("*a") or ""
   file:close()
 
