@@ -56,6 +56,16 @@ local source = assert(read("keyfeed.lua"))
 ok(not source:find("%.conf"), "the script names no config file")
 ok(not source:find('io%.open%(feed_path'), "the script never opens the feed path directly")
 
+-- Panel.qml reaches the setter by evaluating this exact text through
+-- `hyprctl eval`, so a rename on either side has to fail here rather than
+-- quietly leave the HUD installed and drawing nothing.
+local call = assert(load('__sterre_keyboard_hud_config("chords", true)'))
+call()
+ok(subscribed == 1, "the string Panel.qml evals reaches the setter")
+__sterre_keyboard_hud_config("off", false)
+ok(removed == 1, "and off again puts the subscription back")
+subscribed, removed = 0, 0
+
 -- Off stays off.
 __sterre_keyboard_hud_config("off", false)
 ok(subscribed == 0, "an off push subscribes to nothing")
