@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+
 node test/model.test.js
+
+# keyfeed.lua runs inside Hyprland, so the test points XDG_RUNTIME_DIR at a
+# scratch directory and stands in for the hl API.
+lua="$(command -v lua5.5 || command -v lua || command -v lua5.4 || true)"
+if [ -z "$lua" ]; then
+  echo "no lua interpreter found, skipping test/keyfeed.test.lua" >&2
+else
+  scratch="$(mktemp -d)"
+  trap 'rm -rf "$scratch"' EXIT
+  XDG_RUNTIME_DIR="$scratch" "$lua" test/keyfeed.test.lua
+fi

@@ -34,14 +34,19 @@ What this one does about it:
   their own: arrows, Escape, Tab, the function row.
 - **The map is off until you turn it on**, and it is the half that necessarily
   sees everything, because "which keys are held" is what it draws.
-- **Turning something off stops the recording**, not just the drawing. The Lua
-  side re-reads the config on every event and writes nothing it is not asked
-  for.
+- **Turning something off stops the recording**, not just the drawing. With both
+  halves off there is no subscription at all, so Hyprland is not handing
+  [keyfeed.lua](keyfeed.lua) keystrokes in the first place.
+- **The Lua side opens no file it did not create.** The two settings that decide
+  what may be recorded are pushed in by the bar widget with `hyprctl eval`, so
+  the callback that runs on the input thread never opens a path another process
+  could replace first. The feed itself is staged under a private name and
+  renamed into place, which replaces a symlink planted there instead of writing
+  through it.
 - **Off stays off.** Every switch in the panel is written to this plugin's entry
   in `~/.config/omarchy/shell.json`, so what you last chose is what you get back
-  after a reboot, a shell restart or a plugin reload. Between Hyprland starting
-  and the bar writing its config there is no config at all, and
-  [keyfeed.lua](keyfeed.lua) records nothing while that is true.
+  after a reboot, a shell restart or a plugin reload. Until the bar has pushed
+  its settings, [keyfeed.lua](keyfeed.lua) is off and records nothing.
 - **Only keycodes are written, never characters**, and only into
   `$XDG_RUNTIME_DIR`, which systemd creates as mode 0700 and wipes at logout.
   Nothing is kept between sessions and nothing leaves the machine.
@@ -129,14 +134,21 @@ showing nothing.
 [keyfeed.lua](keyfeed.lua) is the only thing that sees your keys. It tracks
 which are held, decides per event what is allowed out, and writes one small
 JSON object to `$XDG_RUNTIME_DIR/sterre-keyboard-hud.json`: the chord for the
-strip, the held set for the map, each only if that half is on.
+strip, the held set for the map, each only if that half is on. It reads nothing:
+the bar widget pushes the two recording settings in with `hyprctl eval`, and the
+feed is written to a fresh private name and renamed over the target, so neither
+half of the exchange opens a path someone else can have replaced. Its behaviour
+is covered by [test/keyfeed.test.lua](test/keyfeed.test.lua), which stands in for
+the Hyprland API and includes the symlink case.
 
 [Overlay.qml](Overlay.qml) watches that file and draws both cards, one
 `PanelWindow` per screen, never taking keyboard focus so it can sit there while
 you type into something else, and with an empty input region so it never takes
 a click either. Both matter: it is a full width strip along an edge, so without
-that it would cover whatever the bar has there. [Panel.qml](Panel.qml) is the bar widget and
-writes the settings the Lua side reads back.
+that it would cover whatever the bar has there. [Panel.qml](Panel.qml) is the bar
+widget: it owns the settings, pushes the recording switches to the Lua side, and
+writes the rest to `$XDG_RUNTIME_DIR/sterre-keyboard-hud.conf` for the overlay to
+pick up.
 
 [Model.js](Model.js) holds the physical layout, the keymap parser, chord
 ordering, repeat collapsing and expiry, and the layout picking. It is covered by

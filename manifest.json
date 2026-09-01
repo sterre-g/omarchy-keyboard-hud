@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "sterre.keyboard-hud",
   "name": "Keyboard HUD",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "sterre-g",
   "license": "MIT",
   "description": "On screen key strip and keyboard map for screencasts, stacked in either order and labelled from your actual keyboard layout.",

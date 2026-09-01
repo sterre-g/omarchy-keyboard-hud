@@ -63,6 +63,20 @@ Panel {
       layout: String(root.setting("layout", "")),
       variant: String(root.setting("variant", ""))
     }, null, 2) + "\n")
+    root.pushFeedConfig()
+  }
+
+  // Tell the Hyprland side the two settings that decide whether a keypress is
+  // recorded at all. It used to read them back out of configPath on every key,
+  // which put a callback on the input thread in the position of opening a path
+  // any process running as this user could replace first. Both values are
+  // picked from a fixed set here, so nothing that arrives from outside the
+  // widget reaches the eval.
+  function pushFeedConfig() {
+    if (!root.settingsApplied) return
+    var strip = root.strip === "all" || root.strip === "chords" ? root.strip : "off"
+    Quickshell.execDetached(["hyprctl", "eval",
+      "__sterre_keyboard_hud_config(\"" + strip + "\", " + (root.map ? "true" : "false") + ")"])
   }
 
   // Both monitors get their own copy of this widget and both write the config,
@@ -214,6 +228,16 @@ Panel {
     root.checkFeed()
     devices.running = true
     Qt.callLater(function () { keyCatcher.forceActiveFocus() })
+  }
+
+  // hyprctl reload re-runs the Hyprland config, and a freshly loaded
+  // keyfeed.lua is off until it is told otherwise. Push again, or a reload
+  // leaves the HUD looking installed and drawing nothing.
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      if (event && String(event.name) === "configreloaded") root.pushFeedConfig()
+    }
   }
 
   FileView {
