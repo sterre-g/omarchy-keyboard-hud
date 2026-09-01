@@ -4,7 +4,7 @@ Two ways of showing what you are typing, in one plugin: a **strip** of the keys
 and chords you just pressed, and a **map** of the whole keyboard that lights up
 the keys you are holding.
 
-![The strip above the map, both labelled from a Colemak DH Wide ISO layout](screenshot.png)
+![The strip above the map, both labelled from a Colemak DH Wide ISO layout](preview.png)
 
 They stack, in either order, so you can have the chord names above the board or
 below it. Either half can be off.
