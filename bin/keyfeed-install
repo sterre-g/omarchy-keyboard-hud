@@ -6,7 +6,7 @@
 # loads. It appends exactly one guarded line and removes exactly that line.
 set -euo pipefail
 
-PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 LUA="$PLUGIN_DIR/keyfeed.lua"
 CONFIG="${HYPRLAND_CONFIG:-$HOME/.config/hypr/hyprland.lua}"
 MARKER="-- sterre.keyboard-hud"
@@ -19,6 +19,50 @@ usage: keyfeed-install [--uninstall|--status]
   --uninstall  remove it again
   --status     say whether it is installed
 EOF
+}
+
+# A Lua string literal, not a shell one. A backslash or a quote in the path
+# would end the literal early and leave the rest of it as code, and this line
+# is written into a file Hyprland executes.
+lua_dofile_line() {
+  local path="$1"
+  case "$path" in
+    *$'\n'*)
+      echo "the plugin path contains a newline, refusing to write it into a Lua file" >&2
+      exit 1
+      ;;
+  esac
+  path="${path//\\/\\\\}"
+  path="${path//\"/\\\"}"
+  printf 'dofile("%s")' "$path"
+}
+
+# ~/.config/hypr/hyprland.lua is a symlink into a dotfiles repo on plenty of
+# machines. Resolve it before writing, or the rename below replaces the link
+# with a regular file instead of editing what it points at.
+resolve_config() {
+  CONFIG="$(realpath -- "$CONFIG")"
+}
+
+# Replace the config with what arrives on stdin, in one step. The temp file is
+# made in the same directory so the rename cannot cross a filesystem, and it
+# takes the config's own mode first, because mktemp's 0600 would otherwise
+# become the mode of a file that was not ours to tighten. Copying the bytes
+# back over the original instead, which is what this used to do, leaves a
+# window where the config on disk is half written and Hyprland is one reload
+# away from reading it.
+rewrite_config() {
+  local tmp
+  tmp="$(mktemp -- "$(dirname -- "$CONFIG")/.keyfeed-install.XXXXXX")"
+  trap 'rm -f -- "$tmp"' EXIT
+  cat >"$tmp"
+  chmod --reference="$CONFIG" -- "$tmp"
+  mv -f -- "$tmp" "$CONFIG"
+  trap - EXIT
+}
+
+backup_config() {
+  cp -- "$CONFIG" "$CONFIG.bak.$(date +%s)"
 }
 
 installed() {
@@ -34,34 +78,51 @@ case "${1:-install}" in
     fi
     exit 0
     ;;
+
   --uninstall)
     if ! installed; then
       echo "not installed, nothing to do"
       exit 0
     fi
-    cp "$CONFIG" "$CONFIG.bak.$(date +%s)"
-    # Delete the marker line and the dofile line that follows it. The result is
-    # copied back rather than moved, because mv would bring mktemp's 0600 with
-    # it and quietly change the mode of a config file that was not ours.
-    tmp="$(mktemp)"
-    awk -v marker="$MARKER" '
-      $0 == marker { skip = 2; next }
-      skip > 0 { skip--; next }
+
+    resolve_config
+    DOFILE="$(lua_dofile_line "$LUA")"
+    backup_config
+
+    # Both lines are matched by their exact contents, so nothing else in the
+    # file can be caught by position. This used to skip two lines from the
+    # marker, which took out the dofile line and then whatever the user had
+    # written after it.
+    if ! grep -qxF -- "$DOFILE" "$CONFIG"; then
+      echo "the marker is in $CONFIG but this line is not:" >&2
+      echo "  $DOFILE" >&2
+      echo "the plugin has probably moved; remove both lines by hand" >&2
+      exit 1
+    fi
+
+    # Through the environment rather than -v: awk expands escape sequences in
+    # a -v assignment, so a backslash in the plugin path would arrive at awk
+    # already unescaped and match nothing.
+    MARKER="$MARKER" DOFILE="$DOFILE" awk '
+      $0 == ENVIRON["MARKER"] { next }
+      $0 == ENVIRON["DOFILE"] { next }
       { print }
-    ' "$CONFIG" > "$tmp"
-    cat "$tmp" > "$CONFIG"
-    rm -f "$tmp"
+    ' "$CONFIG" | rewrite_config
+
     hyprctl reload >/dev/null 2>&1 || true
     echo "removed from $CONFIG, a backup is beside it"
     echo "the shell keeps running; the feed simply stops updating"
     exit 0
     ;;
+
   --help|-h)
     usage
     exit 0
     ;;
+
   install)
     ;;
+
   *)
     usage
     exit 1
@@ -83,8 +144,14 @@ if installed; then
   exit 0
 fi
 
-cp "$CONFIG" "$CONFIG.bak.$(date +%s)"
-printf '\n%s\n%s\n' "$MARKER" "dofile(\"$LUA\")" >> "$CONFIG"
+resolve_config
+DOFILE="$(lua_dofile_line "$LUA")"
+backup_config
+
+# Appended through the same atomic rewrite as the removal, rather than with
+# >>, so an interrupted install cannot leave half a line in a file Hyprland
+# executes.
+{ cat -- "$CONFIG"; printf '\n%s\n%s\n' "$MARKER" "$DOFILE"; } | rewrite_config
 hyprctl reload >/dev/null 2>&1 || true
 
 echo "added to $CONFIG"
@@ -92,6 +159,8 @@ echo
 echo "Hyprland now sends every keypress, from every window, to that script."
 echo "The strip defaults to chords, which drops plain typing without writing"
 echo "it anywhere, and the map is off until you turn it on. Only keycodes are"
-echo "written, only into \$XDG_RUNTIME_DIR, mode 0700, cleared at logout."
+echo "written, and only into \$XDG_RUNTIME_DIR/sterre-keyboard-hud, a directory"
+echo "the script creates mode 0700 and checks before every run. It is cleared"
+echo "at logout."
 echo
 echo "Undo with: $0 --uninstall"

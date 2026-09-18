@@ -40,16 +40,24 @@ What this one does about it:
 - **The Lua side opens no file it did not create.** The two settings that decide
   what may be recorded are pushed in by the bar widget with `hyprctl eval`, so
   the callback that runs on the input thread never opens a path another process
-  could replace first. The feed itself is staged under a private name and
-  renamed into place, which replaces a symlink planted there instead of writing
-  through it.
+  could replace first. The feed itself is staged and renamed into place, which
+  replaces a symlink planted there instead of writing through it.
 - **Off stays off.** Every switch in the panel is written to this plugin's entry
   in `~/.config/omarchy/shell.json`, so what you last chose is what you get back
   after a reboot, a shell restart or a plugin reload. Until the bar has pushed
   its settings, [keyfeed.lua](keyfeed.lua) is off and records nothing.
 - **Only keycodes are written, never characters**, and only into
-  `$XDG_RUNTIME_DIR`, which systemd creates as mode 0700 and wipes at logout.
-  Nothing is kept between sessions and nothing leaves the machine.
+  `$XDG_RUNTIME_DIR/sterre-keyboard-hud`, a directory both halves of the plugin
+  create with `mkdir -m 700` and re-check before use: not a symlink, a real
+  directory, owned by you. There is no `/tmp` fallback, because `/tmp` is shared
+  with every other account on the machine; with no `XDG_RUNTIME_DIR` the feed
+  stays off and nothing is written at all. `XDG_RUNTIME_DIR` is wiped at logout,
+  so nothing is kept between sessions and nothing leaves the machine.
+- **Everything read back in is bounded.** The feed, the config and the output of
+  `hyprctl` and `xkbcli` are each capped in bytes, checked for shape before they
+  are believed, and the two commands are killed if they have not finished in
+  five seconds. A file that grows without bound or a command that hangs is a
+  stalled UI thread, not a bigger version of the same thing.
 - **The feed is inert until you wire it in** with a command you run on purpose,
   and `bin/keyfeed-install --uninstall` takes it back out.
 
@@ -133,11 +141,14 @@ showing nothing.
 
 [keyfeed.lua](keyfeed.lua) is the only thing that sees your keys. It tracks
 which are held, decides per event what is allowed out, and writes one small
-JSON object to `$XDG_RUNTIME_DIR/sterre-keyboard-hud.json`: the chord for the
-strip, the held set for the map, each only if that half is on. It reads nothing:
-the bar widget pushes the two recording settings in with `hyprctl eval`, and the
-feed is written to a fresh private name and renamed over the target, so neither
-half of the exchange opens a path someone else can have replaced. Its behaviour
+JSON object to `$XDG_RUNTIME_DIR/sterre-keyboard-hud/feed.json`: the chord for
+the strip, the held set for the map, each only if that half is on. It reads
+nothing: the bar widget pushes the two recording settings in with `hyprctl eval`,
+and the feed is staged beside itself and renamed over the target, so neither
+half of the exchange opens a path someone else can have replaced. The staging
+name is fixed rather than random because the directory it sits in is the
+guarantee: Lua cannot ask `io.open` for an exclusive or no-follow create, so a
+private directory is what there is, and a random name inside one adds nothing. Its behaviour
 is covered by [test/keyfeed.test.lua](test/keyfeed.test.lua), which stands in for
 the Hyprland API and includes the symlink case.
 
@@ -147,8 +158,8 @@ you type into something else, and with an empty input region so it never takes
 a click either. Both matter: it is a full width strip along an edge, so without
 that it would cover whatever the bar has there. [Panel.qml](Panel.qml) is the bar
 widget: it owns the settings, pushes the recording switches to the Lua side, and
-writes the rest to `$XDG_RUNTIME_DIR/sterre-keyboard-hud.conf` for the overlay to
-pick up.
+writes the rest to `$XDG_RUNTIME_DIR/sterre-keyboard-hud/config.json` for the
+overlay to pick up, through a rename rather than a truncating write.
 
 [Model.js](Model.js) holds the physical layout, the keymap parser, chord
 ordering, repeat collapsing and expiry, and the layout picking. It is covered by

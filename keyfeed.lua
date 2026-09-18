@@ -28,13 +28,49 @@
 if _G.__sterre_keyboard_hud_loaded then return end
 _G.__sterre_keyboard_hud_loaded = true
 
-local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
-local feed_path = runtime_dir .. "/sterre-keyboard-hud.json"
+-- Everything this plugin writes lives in a directory of its own, mode 0700,
+-- inside XDG_RUNTIME_DIR. That directory is the entire security argument for
+-- the writes further down: no other user can create a name inside it, so there
+-- is no symlink to follow, no name to plant, and a fixed staging name is worth
+-- exactly as much as a random one. Lua's io.open cannot ask for O_EXCL or
+-- O_NOFOLLOW, so the guarantee has to come from the directory rather than from
+-- the open, and it is established once here, never on the key path.
+--
+-- There is deliberately no /tmp fallback. /tmp is shared, and a keystroke feed
+-- is not something to write somewhere every account on the box can reach; with
+-- no XDG_RUNTIME_DIR the feed stays off and the subscription is never made.
+local runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+local state_dir = runtime_dir and (runtime_dir .. "/sterre-keyboard-hud") or nil
+local feed_path = state_dir and (state_dir .. "/feed.json") or nil
+local tmp_path = feed_path and (feed_path .. ".tmp") or nil
 
--- Names the feed is staged under before it is renamed into place. Fresh per
--- write and unpredictable, so there is no name to plant anything at.
-math.randomseed()
-local seq = 0
+local function shell_quote(value)
+  return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
+-- os.execute returns true on Lua 5.2+ and the raw exit status on 5.1.
+local function shell_ok(command)
+  local ok, _, code = os.execute(command)
+  return ok == true or ok == 0 or (ok and code == 0)
+end
+
+-- mkdir -m 700 creates it with the mode already in place, so it never exists
+-- readable by anyone else even briefly. The tests then refuse a directory that
+-- was there first and belongs to somebody else, or a symlink left in its place;
+-- chmod re-tightens one of ours that an earlier version left too open.
+local function state_dir_ready()
+  if not state_dir then return false end
+  local quoted = shell_quote(state_dir)
+  return shell_ok(table.concat({
+    "mkdir -m 700 -p ", quoted, " 2>/dev/null",
+    " && [ ! -L ", quoted, " ]",
+    " && [ -d ", quoted, " ]",
+    " && [ -O ", quoted, " ]",
+    " && chmod 700 ", quoted, " 2>/dev/null",
+  }))
+end
+
+local writable = state_dir_ready()
 
 -- X11 keycodes: the evdev code plus 8.
 local MODIFIERS = {
@@ -93,17 +129,12 @@ local function modifiers_held()
   return codes
 end
 
--- Atomic, and safe against a symlink planted at feed_path. The payload is
--- written to a private name and renamed over the target: rename replaces
--- whatever sits there, and replacing a symlink unlinks the link rather than
--- writing through it. Opening feed_path with "w" instead, which is what this
--- used to do, truncates and writes into whatever the link points at.
+-- Staged and renamed rather than written in place, so a reader never sees half
+-- a record. The staging name is fixed because it sits in a directory only this
+-- user can write; the old code drew it from math.random, which is a predictable
+-- PRNG and was doing no work the directory was not already doing.
 local function write_feed(time_ms, code, want_map)
-  seq = seq + 1
-  local tmp = string.format("%s.%d.%d.tmp", feed_path, seq, math.random(0, 2 ^ 30))
-  os.remove(tmp)
-
-  local file = io.open(tmp, "w")
+  local file = io.open(tmp_path, "w")
   if not file then return end
 
   local parts = { '"t":' .. tostring(time_ms) }
@@ -118,7 +149,7 @@ local function write_feed(time_ms, code, want_map)
   file:write("{" .. table.concat(parts, ",") .. "}")
   file:close()
 
-  if not os.rename(tmp, feed_path) then os.remove(tmp) end
+  if not os.rename(tmp_path, feed_path) then os.remove(tmp_path) end
 end
 
 local function on_key(keycode, time_ms, state)
@@ -141,7 +172,7 @@ local function on_key(keycode, time_ms, state)
 end
 
 local function start()
-  if subscription then return end
+  if subscription or not writable then return end
   held = {}
   subscription = hl.on("input.keyboard.key", on_key)
 end
@@ -152,9 +183,8 @@ local function stop()
     subscription = nil
   end
   held = {}
-  -- Unlinking follows no symlink, so this clears the feed and never the target
-  -- of one planted in its place.
-  os.remove(feed_path)
+  if feed_path then os.remove(feed_path) end
+  if tmp_path then os.remove(tmp_path) end
 end
 
 -- Called by the bar widget through `hyprctl eval`. Anything that is not one of
@@ -165,6 +195,8 @@ function _G.__sterre_keyboard_hud_config(strip, map)
   map_on = map == true
 
   if strip_mode ~= "off" or map_on then start() else stop() end
+  return writable and "ok" or "no private runtime directory, feed disabled"
 end
 
-os.remove(feed_path)
+if feed_path then os.remove(feed_path) end
+if tmp_path then os.remove(tmp_path) end

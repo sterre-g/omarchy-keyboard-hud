@@ -13,4 +13,16 @@ else
   scratch="$(mktemp -d)"
   trap 'rm -rf "$scratch"' EXIT
   XDG_RUNTIME_DIR="$scratch" "$lua" test/keyfeed.test.lua
+
+  # With nowhere private to write, the script must decline rather than fall
+  # back to a directory shared with every other account on the machine.
+  env -u XDG_RUNTIME_DIR "$lua" -e '
+    _G.hl = { on = function() error("subscribed with no private runtime directory") end }
+    dofile("keyfeed.lua")
+    __sterre_keyboard_hud_config("all", true)
+    assert(not io.open("/tmp/sterre-keyboard-hud.json", "r"), "wrote into /tmp")
+    print("1 assertion passed (no XDG_RUNTIME_DIR)")
+  '
 fi
+
+./test/keyfeed-install.test.sh

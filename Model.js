@@ -78,9 +78,32 @@ function labelForKeysym(keysym) {
 // sections. Reading the compiled keymap rather than shipping a table per
 // layout is what makes this work for colemak, dvorak, azerty and anything else
 // the user has actually configured.
+// Bytes a file or collector may hand us before it is dropped unread. Every
+// input on these paths is small and fixed in shape: a feed record is one object
+// of a few dozen bytes, the config a dozen keys, `hyprctl -j devices` a list of
+// input devices, a compiled keymap a few hundred kilobytes of text. Something
+// past these is not a larger version of the same thing, and parsing it only
+// means blocking the UI thread on whatever produced it.
+var LIMITS = { feed: 4096, config: 8192, devices: 262144, keymap: 1048576 }
+
+// Held keys and modifiers in one feed record. A keyboard has to be held in two
+// hands, so anything longer is padding.
+var MAX_CODES = 24
+
+function parseBounded(text, kind) {
+  var raw = String(text || "")
+  if (raw === "" || raw.length > (LIMITS[kind] || 0)) return null
+  try {
+    var data = JSON.parse(raw)
+    return data && typeof data === "object" && !Array.isArray(data) ? data : null
+  } catch (e) {
+    return null
+  }
+}
+
 function parseKeymap(text) {
   var raw = String(text || "")
-  if (raw === "") return {}
+  if (raw === "" || raw.length > LIMITS.keymap) return {}
 
   var codeByName = {}
   var codeLine = /^\s*<([A-Za-z0-9_+\-]+)>\s*=\s*(\d+);/gm
@@ -171,17 +194,12 @@ function chordText(event, keymapLabels) {
 }
 
 function parseFeed(raw) {
-  var data = null
-  try {
-    data = JSON.parse(String(raw || ""))
-  } catch (e) {
-    return null
-  }
-  if (!data || typeof data !== "object") return null
+  var data = parseBounded(raw, "feed")
+  if (!data) return null
 
   var down = []
   if (Array.isArray(data.down)) {
-    for (var i = 0; i < data.down.length; i++) {
+    for (var i = 0; i < data.down.length && down.length < MAX_CODES; i++) {
       var held = Number(data.down[i])
       if (isFinite(held) && held > 0 && Math.floor(held) === held) down.push(held)
     }
@@ -189,7 +207,7 @@ function parseFeed(raw) {
 
   var mods = []
   if (Array.isArray(data.mods)) {
-    for (var m = 0; m < data.mods.length; m++) {
+    for (var m = 0; m < data.mods.length && mods.length < MAX_CODES; m++) {
       var mod = Number(data.mods[m])
       if (isFinite(mod) && mod > 0) mods.push(mod)
     }
@@ -331,6 +349,33 @@ function settingsWith(current, patch) {
 // Forcing qwerty is a first class choice rather than a layout override the
 // user has to spell out, because "show it the way everyone else sees it" is
 // the common case when demoing to other people.
+// Both files this plugin writes live in a directory of its own inside
+// XDG_RUNTIME_DIR, created mode 0700 and checked before use. There is no /tmp
+// fallback: /tmp is shared with every other account on the machine, and a
+// keystroke feed is not something to write where they can reach it. With no
+// XDG_RUNTIME_DIR the paths come back empty and nothing is written or read.
+function statePaths(runtimeDir) {
+  var dir = String(runtimeDir || "")
+  if (dir === "" || dir.charAt(0) !== "/") return { dir: "", feed: "", config: "" }
+  var base = dir + "/sterre-keyboard-hud"
+  return { dir: base, feed: base + "/feed.json", config: base + "/config.json" }
+}
+
+// mkdir -m 700 creates it with the mode already on it, so it is never briefly
+// readable by anyone else. The tests then refuse a symlink left in its place or
+// a directory that was there first and belongs to somebody else; chmod
+// re-tightens one of ours that an earlier version left too open. The exit
+// status carries the whole chain, so a caller has one thing to check. Mirrors
+// state_dir_ready() in keyfeed.lua, which runs inside Hyprland rather than in
+// the shell and so cannot share this code.
+function stateDirCommand(dir) {
+  var quoted = "'" + String(dir).split("'").join("'\\''") + "'"
+  return ["sh", "-c",
+    "mkdir -m 700 -p " + quoted
+    + " && [ ! -L " + quoted + " ] && [ -d " + quoted + " ] && [ -O " + quoted + " ]"
+    + " && chmod 700 " + quoted]
+}
+
 var QWERTY_OVERRIDE = { layout: "us", variant: "" }
 
 function overrideFrom(forceQwerty, layout, variant) {
@@ -344,9 +389,9 @@ function overrideFrom(forceQwerty, layout, variant) {
 // keyboard belonging to an input method, which carries no variant, so a real
 // device with a variant is the better answer when there is one.
 function pickKeyboard(keyboards) {
-  var list = keyboards || []
+  var list = Array.isArray(keyboards) ? keyboards : []
   var best = null
-  for (var i = 0; i < list.length; i++) {
+  for (var i = 0; i < list.length && i < 64; i++) {
     var kb = list[i]
     if (!kb || !kb.name) continue
     if (String(kb.name).indexOf("hl-virtual-keyboard") === 0) continue
@@ -357,14 +402,29 @@ function pickKeyboard(keyboards) {
   return list.length > 0 ? list[0] : null
 }
 
+// The layout and variant come out of `hyprctl -j devices`, which reports what
+// the Hyprland config asked for. That is not a shell, so there is nothing to
+// quote, but an argv element beginning with a dash is still read as an option
+// by the program it is handed to. Only the shape xkb layout names actually
+// have is passed through; anything else falls back to the default.
+var XKB_NAME = /^[A-Za-z0-9_,-]{1,64}$/
+
+function xkbName(value, fallback) {
+  var name = String(value === undefined || value === null ? "" : value)
+  if (name === "") return ""
+  if (name.charAt(0) === "-" || !XKB_NAME.test(name)) return fallback
+  return name
+}
+
 function keymapCommand(keyboard, override) {
   var layout = override && override.layout ? override.layout : (keyboard && keyboard.layout) || "us"
   var variant = override && override.variant !== undefined && override.variant !== null
     ? override.variant
     : (keyboard && keyboard.variant) || ""
 
-  var command = ["xkbcli", "compile-keymap", "--layout", String(layout)]
-  if (variant !== "") command.push("--variant", String(variant))
+  var command = ["xkbcli", "compile-keymap", "--layout", xkbName(layout, "us") || "us"]
+  var safeVariant = xkbName(variant, "")
+  if (safeVariant !== "") command.push("--variant", safeVariant)
   return command
 }
 
@@ -414,6 +474,10 @@ if (typeof module !== "undefined" && module.exports) {
     settingsWith: settingsWith,
     QWERTY_OVERRIDE: QWERTY_OVERRIDE,
     overrideFrom: overrideFrom,
+    parseBounded: parseBounded,
+    statePaths: statePaths,
+    stateDirCommand: stateDirCommand,
+    xkbName: xkbName,
     pickKeyboard: pickKeyboard,
     keymapCommand: keymapCommand,
     layoutName: layoutName

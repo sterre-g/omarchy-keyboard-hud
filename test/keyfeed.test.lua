@@ -6,7 +6,8 @@
 -- Run through ./run-tests, which points XDG_RUNTIME_DIR at a scratch directory.
 
 local runtime = assert(os.getenv("XDG_RUNTIME_DIR"), "XDG_RUNTIME_DIR must be set")
-local feed = runtime .. "/sterre-keyboard-hud.json"
+local state_dir = runtime .. "/sterre-keyboard-hud"
+local feed = state_dir .. "/feed.json"
 local victim = runtime .. "/victim"
 
 local passed = 0
@@ -55,6 +56,21 @@ ok(callback == nil, "no callback is live before a config push")
 local source = assert(read("keyfeed.lua"))
 ok(not source:find("%.conf"), "the script names no config file")
 ok(not source:find('io%.open%(feed_path'), "the script never opens the feed path directly")
+
+-- /tmp is shared with every other account on the machine. A keystroke feed
+-- that lands there because XDG_RUNTIME_DIR happened to be unset is the finding,
+-- so the fallback must not exist in the source at all.
+ok(not source:find('"/tmp"'), "there is no /tmp fallback")
+
+-- The directory is the security argument for the fixed staging name, so it has
+-- to actually be private and actually be a directory.
+local mode = io.popen("stat -c '%a %F' " .. state_dir):read("*a")
+ok(mode:match("^700 directory"), "the state directory is a private directory, got " .. mode)
+
+-- Predictable PRNG naming was doing no work the directory was not already
+-- doing, and remove-then-open is a window rather than a guarantee.
+ok(not source:find("math%.random%("), "the staging name does not come from math.random")
+ok(not source:find("os%.remove%(tmp%)"), "the staging file is not removed before it is opened")
 
 -- Panel.qml reaches the setter by evaluating this exact text through
 -- `hyprctl eval`, so a rename on either side has to fail here rather than
@@ -123,7 +139,7 @@ shell("test -L " .. feed .. " && exit 1 || exit 0")
 callback(38, 1009, 0)
 
 -- No temporary files are left behind.
-local leftovers = io.popen("ls " .. runtime .. " | grep -c '%.tmp$' || true"):read("*a")
+local leftovers = io.popen("ls " .. state_dir .. " | grep -c '%.tmp$' || true"):read("*a")
 ok(tonumber(leftovers) == 0 or leftovers:match("^0"), "no staging files are left behind")
 
 -- Turning everything off unsubscribes rather than merely staying quiet, and

@@ -12,8 +12,10 @@ Panel {
   moduleName: "sterre.keyboard-hud"
   manageIpc: false
 
-  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
-  readonly property string configPath: root.runtimeDir + "/sterre-keyboard-hud.conf"
+  readonly property var paths: Model.statePaths(Quickshell.env("XDG_RUNTIME_DIR"))
+  // Empty until the directory has been created and checked, which is what
+  // keeps the FileView below from writing into a path nobody has vouched for.
+  property string configPath: ""
 
   property string strip: Model.normalizeStrip(root.setting("strip", "chords"))
   property bool map: Model.normalizeBool(root.setting("map", false))
@@ -50,7 +52,7 @@ Panel {
   // the running shell has been keeping correct, which is what made a plugin
   // reload turn the HUD back on.
   function writeConfig() {
-    if (!root.settingsApplied) return
+    if (!root.settingsApplied || root.configPath === "") return
     config.setText(JSON.stringify({
       strip: root.strip,
       map: root.map,
@@ -83,12 +85,7 @@ Panel {
   // so each one reads it back. For a switch that decides whether keystrokes are
   // recorded, a stale copy re-asserting itself is not a cosmetic problem.
   function adoptConfig(raw) {
-    var data = {}
-    try {
-      data = JSON.parse(String(raw || "{}"))
-    } catch (e) {
-      return
-    }
+    var data = Model.parseBounded(raw, "config")
     if (!data || typeof data.strip === "undefined") return
     root.strip = Model.normalizeStrip(data.strip)
     root.map = Model.normalizeBool(data.map)
@@ -195,21 +192,44 @@ Panel {
   }
 
   function adoptDevices(raw) {
-    var data = null
-    try {
-      data = JSON.parse(String(raw || "{}"))
-    } catch (e) {
-      return
-    }
+    var data = Model.parseBounded(raw, "devices")
+    if (!data) return
     var keyboard = Model.pickKeyboard(data && data.keyboards ? data.keyboards : [])
     var override = Model.overrideFrom(root.forceQwerty,
       String(root.setting("layout", "")), String(root.setting("variant", "")))
     root.detectedLayout = Model.layoutName(keyboard, override)
   }
 
+  // No directory means no config file, so the two answers resolveState() is
+  // waiting for become one and the stored settings are the only ones there are.
+  function settleWithoutConfig() {
+    if (root.configResolved) return
+    root.configPresent = false
+    root.configResolved = true
+    root.resolveState()
+  }
+
   Component.onCompleted: {
+    if (root.paths.dir !== "") stateDir.running = true
+    else root.settleWithoutConfig()
     root.checkFeed()
     devices.running = true
+  }
+
+  // Ask for the private directory once, and only start using the config file
+  // once the answer comes back. resolveState() has been waiting for two
+  // asynchronous answers since it was written; this is the third.
+  Process {
+    id: stateDir
+    command: Model.stateDirCommand(root.paths.dir)
+    onExited: function (exitCode) {
+      if (exitCode === 0) {
+        root.configPath = root.paths.config
+        return
+      }
+      console.warn("sterre.keyboard-hud: no private runtime directory, settings will not persist")
+      root.settleWithoutConfig()
+    }
   }
 
   onSettingsChanged: {
@@ -243,6 +263,9 @@ Panel {
   FileView {
     id: config
     path: root.configPath
+    // Rename over the target rather than truncating it, so a reader never sees
+    // half a config and a write never follows a link left in its place.
+    atomicWrites: true
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
@@ -284,6 +307,16 @@ Panel {
       waitForEnd: true
       onStreamFinished: root.adoptDevices(text)
     }
+    onRunningChanged: deviceDeadline.running = devices.running
+  }
+
+  // waitForEnd holds the collected output until the process closes its stdout,
+  // so a hyprctl that hangs is a collector that never finishes and a widget
+  // that never learns its layout. Give it five seconds and then take it back.
+  Timer {
+    id: deviceDeadline
+    interval: 5000
+    onTriggered: if (devices.running) devices.signal(15)
   }
 
   IpcHandler {

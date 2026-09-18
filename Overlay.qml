@@ -14,9 +14,13 @@ Item {
   property var manifest: null
   property bool opened: false
 
-  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
-  readonly property string feedPath: root.runtimeDir + "/sterre-keyboard-hud.json"
-  readonly property string configPath: root.runtimeDir + "/sterre-keyboard-hud.conf"
+  readonly property var paths: Model.statePaths(Quickshell.env("XDG_RUNTIME_DIR"))
+  // Both stay empty until the private directory has been created and checked.
+  // The bar widget asks for the same directory; the call is idempotent, and
+  // making it here as well is what keeps a watch from being set on a path
+  // whose parent does not exist yet.
+  property string feedPath: ""
+  property string configPath: ""
 
   property var history: []
   property var down: []
@@ -54,12 +58,8 @@ Item {
   }
 
   function applyConfig(raw) {
-    var data = {}
-    try {
-      data = JSON.parse(String(raw || "{}"))
-    } catch (e) {
-      data = {}
-    }
+    var data = Model.parseBounded(raw, "config")
+    if (!data) return
 
     root.strip = Model.normalizeStrip(data.strip)
     root.map = Model.normalizeBool(data.map)
@@ -104,19 +104,28 @@ Item {
   }
 
   function adoptDevices(raw) {
-    var data = null
-    try {
-      data = JSON.parse(String(raw || "{}"))
-    } catch (e) {
-      return
-    }
+    var data = Model.parseBounded(raw, "devices")
+    if (!data) return
     root.keyboard = Model.pickKeyboard(data && data.keyboards ? data.keyboards : [])
     root.keymapName = Model.layoutName(root.keyboard, root.overrideSpec())
     keymap.command = Model.keymapCommand(root.keyboard, root.overrideSpec())
     keymap.running = true
   }
 
-  Component.onCompleted: root.detectLayout()
+  Component.onCompleted: {
+    if (root.paths.dir !== "") stateDir.running = true
+    root.detectLayout()
+  }
+
+  Process {
+    id: stateDir
+    command: Model.stateDirCommand(root.paths.dir)
+    onExited: function (exitCode) {
+      if (exitCode !== 0) return
+      root.feedPath = root.paths.feed
+      root.configPath = root.paths.config
+    }
+  }
 
   Connections {
     target: Hyprland
@@ -152,6 +161,7 @@ Item {
       waitForEnd: true
       onStreamFinished: root.adoptDevices(text)
     }
+    onRunningChanged: deviceDeadline.running = devices.running
   }
 
   Process {
@@ -161,6 +171,23 @@ Item {
       waitForEnd: true
       onStreamFinished: root.keymapLabels = Model.parseKeymap(text)
     }
+    onRunningChanged: keymapDeadline.running = keymap.running
+  }
+
+  // waitForEnd holds the output until the process closes stdout, so one that
+  // hangs is a collector that never finishes. Both of these are asked for on
+  // every layout switch, so a hung one would also pile up. Give each five
+  // seconds and then take it back.
+  Timer {
+    id: deviceDeadline
+    interval: 5000
+    onTriggered: if (devices.running) devices.signal(15)
+  }
+
+  Timer {
+    id: keymapDeadline
+    interval: 5000
+    onTriggered: if (keymap.running) keymap.signal(15)
   }
 
   Timer {
