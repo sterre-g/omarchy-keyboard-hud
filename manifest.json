@@ -2,16 +2,18 @@
   "schemaVersion": 1,
   "id": "sterre.keyboard-hud",
   "name": "Keyboard HUD",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": "sterre-g",
   "license": "MIT",
   "description": "On screen key strip and keyboard map for screencasts, stacked in either order and labelled from your actual keyboard layout.",
   "kinds": [
+    "service",
     "bar-widget",
     "overlay"
   ],
   "keepLoaded": true,
   "entryPoints": {
+    "service": "Service.qml",
     "barWidget": "Panel.qml",
     "overlay": "Overlay.qml"
   },

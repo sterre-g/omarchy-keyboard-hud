@@ -32,6 +32,11 @@ Panel {
 
   readonly property bool anythingOn: root.strip !== "off" || root.map
 
+  // An IPC target admits one handler and this widget exists once per monitor,
+  // so the target lives in Service.qml and sends each call to the widget on the
+  // focused monitor.
+  property var service: null
+
   readonly property string screenName: root.QsWindow.window && root.QsWindow.window.screen
     ? root.QsWindow.window.screen.name
     : ""
@@ -319,43 +324,25 @@ Panel {
     onTriggered: if (devices.running) devices.signal(15)
   }
 
-  IpcHandler {
-    target: "sterre.keyboard-hud"
-    enabled: root.onFocusedScreen
+  function resolveService() {
+    if (root.service || !root.bar || !root.bar.shell) return
+    var found = typeof root.bar.shell.serviceFor === "function" ? root.bar.shell.serviceFor(root.moduleName) : null
+    if (!found) return
+    root.service = found
+    root.service.registerWidget(root)
+  }
 
-    function open(): void { root.open() }
-    function close(): void { root.close() }
-    function toggle(): void { root.toggle() }
-    function strip(value: string): string {
-      root.setStrip(value)
-      return root.strip
-    }
-    function map(value: string): string {
-      root.setMap(value === "on" || value === "true" || value === "1")
-      return root.map ? "on" : "off"
-    }
-    function qwerty(value: string): string {
-      root.setQwerty(value === "on" || value === "true" || value === "1")
-      return root.forceQwerty ? "on" : "off"
-    }
-    function order(value: string): string {
-      root.setOrder(value)
-      return root.order
-    }
-    function position(value: string): string {
-      root.setPosition(value)
-      return root.position
-    }
-    function off(): string {
-      root.turnOff()
-      return "off"
-    }
-    function status(): string {
-      return "strip " + root.strip + ", map " + (root.map ? "on" : "off")
-        + ", " + root.order + ", " + root.position
-        + ", layout " + (root.detectedLayout === "" ? "unknown" : root.detectedLayout)
-        + ", feed " + (root.feedInstalled ? "installed" : "not installed")
-    }
+  onBarChanged: root.resolveService()
+  Component.onDestruction: if (root.service) root.service.unregisterWidget(root)
+
+  // The shell creates the service on its own schedule, so a widget built first
+  // has to look again rather than give up.
+  Timer {
+    interval: 250
+    repeat: true
+    running: root.service === null
+    triggeredOnStart: true
+    onTriggered: root.resolveService()
   }
 
   BarIconButton {

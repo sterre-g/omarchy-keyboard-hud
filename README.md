@@ -159,7 +159,10 @@ a click either. Both matter: it is a full width strip along an edge, so without
 that it would cover whatever the bar has there. [Panel.qml](Panel.qml) is the bar
 widget: it owns the settings, pushes the recording switches to the Lua side, and
 writes the rest to `$XDG_RUNTIME_DIR/sterre-keyboard-hud/config.json` for the
-overlay to pick up, through a rename rather than a truncating write.
+overlay to pick up, through a rename rather than a truncating write. The widget
+exists once per monitor and an IPC target admits one handler, so
+[Service.qml](Service.qml) owns the target and hands each call to the widget on
+the focused monitor.
 
 [Model.js](Model.js) holds the physical layout, the keymap parser, chord
 ordering, repeat collapsing and expiry, and the layout picking. It is covered by
@@ -177,7 +180,9 @@ omarchy-shell shell rescanPlugins
 ```
 
 Editing the overlay hot reloads. Adding a new file to an installed plugin needs
-`omarchy restart shell`, otherwise Qt serves a cached directory listing.
+`omarchy restart shell`, otherwise Qt serves a cached directory listing. So does
+editing [Service.qml](Service.qml): `keepLoaded` keeps the old instance, and its
+IPC target with it, across a hot reload.
 
 ## License
 
