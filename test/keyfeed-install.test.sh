@@ -3,7 +3,9 @@
 # take a line that is not its own. Everything here is about that.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# The installer writes its physical path into the dofile line, so a checkout
+# reached through a symlink has to be compared physically too.
+cd -P "$(dirname "$0")/.."
 INSTALL="$PWD/bin/keyfeed-install"
 
 scratch="$(mktemp -d)"
