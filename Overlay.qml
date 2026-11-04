@@ -37,6 +37,7 @@ Item {
   property string overrideLayout: ""
   property string overrideVariant: ""
   property bool forceQwerty: false
+  property string formSetting: "auto"
 
   // The service picks the keyboard for the whole shell; this compiles its
   // keymap. Labels come from the keymap the user actually has loaded, so the
@@ -45,6 +46,7 @@ Item {
   readonly property var keyboard: root.service ? root.service.keyboard : null
   property var keymapLabels: ({})
   property string keymapName: ""
+  readonly property var board: Model.layoutFor(Model.keyboardForm(root.formSetting, root.keyboard))
 
   readonly property bool showStrip: root.strip !== "off" && root.history.length > 0
   readonly property bool showMap: root.map
@@ -76,6 +78,7 @@ Item {
     root.mapScale = Model.normalizeScale(data.scale)
     root.lingerMs = Math.max(300, Math.min(10000, Number(data.lingerMs) || 2000))
     root.historyCount = Math.max(1, Math.min(10, Number(data.historyCount) || 4))
+    root.formSetting = Model.normalizeForm(data.form)
 
     var nextLayout = String(data.layout || "")
     var nextVariant = String(data.variant || "")
@@ -348,7 +351,7 @@ Item {
         spacing: root.gap
 
         Repeater {
-          model: Model.LAYOUT
+          model: root.board
 
           Row {
             required property var modelData
@@ -376,10 +379,22 @@ Item {
                   ColorAnimation { duration: root.motion(60) }
                 }
 
+                // The lower half of an ISO Enter reaches up through the row gap
+                // into the upper half, so the two read as one key.
+                Rectangle {
+                  visible: Model.isTail(parent.modelData)
+                  anchors.bottom: parent.top
+                  anchors.bottomMargin: -parent.radius
+                  anchors.right: parent.right
+                  width: parent.width
+                  height: root.gap + parent.radius * 2
+                  color: parent.color
+                }
+
                 Text {
                   textFormat: Text.PlainText
                   anchors.centerIn: parent
-                  text: Model.labelFor(parent.code, root.keymapLabels)
+                  text: Model.keyLabel(parent.modelData, root.keymapLabels)
                   font.family: Style.font.menuFamily
                   font.pixelSize: Math.max(8, Math.round(root.unit * 0.34))
                   color: parent.held ? Commons.Color.menu.background : Commons.Color.menu.text

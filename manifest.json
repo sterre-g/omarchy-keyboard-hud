@@ -38,7 +38,8 @@
       "historyCount": 4,
       "layout": "",
       "variant": "",
-      "qwerty": false
+      "qwerty": false,
+      "form": "auto"
     },
     "schema": [
       {
@@ -123,6 +124,18 @@
         "label": "Always draw a qwerty board",
         "description": "Off follows the layout you are actually using. On is for demoing to people who read qwerty.",
         "defaultValue": false
+      },
+      {
+        "key": "form",
+        "type": "enum",
+        "label": "Board shape",
+        "options": [
+          "auto",
+          "ansi",
+          "iso"
+        ],
+        "description": "auto reads it from the keyboard's layout: an iso or ansi variant says so, plain us is ANSI and every other layout is ISO.",
+        "defaultValue": "auto"
       },
       {
         "key": "layout",

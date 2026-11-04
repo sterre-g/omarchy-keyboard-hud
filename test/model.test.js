@@ -291,6 +291,44 @@ run("the activelayout event yields its keyboard, or nothing for an untyped one",
   assert.equal(M.eventKeyboardName(null), "")
 })
 
+run("the ISO board is as wide as the ANSI one and has the extra key", () => {
+  for (const width of M.ISO.map(M.rowUnits)) assert.equal(width, M.ROW_UNITS)
+  const codes = M.keyCodes(M.ISO)
+  assert.equal(new Set(codes).size, codes.length, "only the lower half of Enter repeats a code")
+  assert.ok(codes.includes(94))
+  assert.ok(!M.keyCodes(M.ANSI).includes(94))
+  assert.deepEqual(M.keyCodes(M.ISO).slice().sort(), M.keyCodes(M.ANSI).concat([94]).sort())
+
+  const enter = M.ISO.flat().filter(key => key[0] === 36)
+  assert.equal(enter.length, 2)
+  assert.equal(M.keyLabel(enter[0], {}), "Enter")
+  assert.equal(M.keyLabel(enter[1], {}), "")
+})
+
+run("colemak dh wide iso puts Z on the ISO key", () => {
+  const labels = M.parseKeymap(COLEMAK)
+  const extra = M.ISO[3][1]
+  assert.equal(extra[0], 94)
+  assert.equal(M.keyLabel(extra, labels), "Z")
+  assert.equal(M.keyLabel(extra, M.parseKeymap(US)), "<")
+})
+
+run("the board shape follows the keymap's variant and layout, and the setting wins", () => {
+  const laptop = { layout: "us", variant: "colemak_dh_wide_iso" }
+  assert.equal(M.keyboardForm("auto", laptop), "iso")
+  assert.equal(M.keyboardForm("auto", { layout: "us", variant: "colemak_dh" }), "ansi")
+  assert.equal(M.keyboardForm("auto", { layout: "us", variant: "" }), "ansi")
+  assert.equal(M.keyboardForm("auto", { layout: "de", variant: "" }), "iso")
+  assert.equal(M.keyboardForm("auto", { layout: "gb,us", variant: "," }), "iso")
+  assert.equal(M.keyboardForm("auto", { layout: "de", variant: "colemak_dh_ansi" }), "ansi")
+  assert.equal(M.keyboardForm("auto", null), "ansi")
+  assert.equal(M.keyboardForm("ansi", laptop), "ansi")
+  assert.equal(M.keyboardForm("ISO", { layout: "us" }), "iso")
+  assert.equal(M.keyboardForm("nonsense", laptop), "iso")
+  assert.equal(M.layoutFor("iso"), M.ISO)
+  assert.equal(M.layoutFor("ansi"), M.ANSI)
+})
+
 run("forcing qwerty overrides the detected layout, and off restores it", () => {
   const keyboard = { name: "kb", layout: "us", variant: "colemak_dh_wide_iso" }
 

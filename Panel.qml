@@ -42,6 +42,7 @@ Panel {
     ? Model.layoutName(root.keyboard, Model.overrideFrom(root.forceQwerty,
         String(root.setting("layout", "")), String(root.setting("variant", ""))))
     : ""
+  readonly property string form: Model.keyboardForm(root.setting("form", "auto"), root.keyboard)
 
   readonly property string screenName: root.QsWindow.window && root.QsWindow.window.screen
     ? root.QsWindow.window.screen.name
@@ -74,7 +75,8 @@ Panel {
       historyCount: Math.max(1, Math.min(10, Number(root.setting("historyCount", 4)))),
       qwerty: root.forceQwerty,
       layout: String(root.setting("layout", "")),
-      variant: String(root.setting("variant", ""))
+      variant: String(root.setting("variant", "")),
+      form: Model.normalizeForm(root.setting("form", "auto"))
     }, null, 2) + "\n")
     root.pushFeedConfig()
   }
@@ -564,7 +566,7 @@ Panel {
             textFormat: Text.PlainText
             width: parent.width
             text: "Layout: " + (root.detectedLayout === "" ? "detecting" : root.detectedLayout)
-              + (root.forceQwerty ? "  (forced qwerty)" : "")
+              + (root.forceQwerty ? "  (forced qwerty)" : "") + ", " + root.form.toUpperCase() + " board"
               + "\nc chords, a everything, s strip off, m map, o order, q qwerty, x all off"
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

@@ -138,6 +138,13 @@ which is the one last typed on, then one that has a variant set. You can
 override the result with the `layout` and `variant` settings if it still picks
 wrong. The name of whatever it settled on is printed under the map.
 
+The map draws an ANSI or an ISO board. ISO has the extra key beside the left
+Shift (`<LSGT>`, where Colemak-DH ISO puts Z), the backslash key moved down
+beside an Enter two rows tall. No keymap says which board you have, so the
+`form` setting decides: `auto` believes a variant with `iso` or `ansi` in its
+name, draws plain `us` as ANSI and every other layout as ISO. Set `ansi` or
+`iso` for a keyboard that guess gets wrong.
+
 If the keymap cannot be read, the map falls back to US labels rather than
 showing nothing.
 

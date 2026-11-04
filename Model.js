@@ -1,7 +1,7 @@
 // The physical keyboard, as rows of [x11 keycode, fallback label, width in key
 // units]. Positions and keycodes are physical and do not move when the layout
 // changes; only the labels do, and those come from the compiled keymap.
-var LAYOUT = [
+var ANSI = [
   [
     [9, "Esc", 1], [10, "1", 1], [11, "2", 1], [12, "3", 1], [13, "4", 1], [14, "5", 1],
     [15, "6", 1], [16, "7", 1], [17, "8", 1], [18, "9", 1], [19, "0", 1],
@@ -27,6 +27,61 @@ var LAYOUT = [
     [108, "Alt", 1.25], [134, "Super", 1.25], [135, "Menu", 1.25], [105, "Ctrl", 1.25]
   ]
 ]
+
+// ISO moves the backslash key down beside Enter, shortens the left Shift to
+// make room for one more key (94, <LSGT>), and makes Enter two rows tall. The
+// lower half of Enter is the same keycode drawn again, marked by a fourth
+// element so it lights with the top half but carries no label of its own.
+var ISO = [
+  ANSI[0],
+  [
+    [23, "Tab", 1.5], [24, "Q", 1], [25, "W", 1], [26, "E", 1], [27, "R", 1], [28, "T", 1],
+    [29, "Y", 1], [30, "U", 1], [31, "I", 1], [32, "O", 1], [33, "P", 1],
+    [34, "[", 1], [35, "]", 1], [36, "Enter", 1.5]
+  ],
+  [
+    [66, "Caps", 1.75], [38, "A", 1], [39, "S", 1], [40, "D", 1], [41, "F", 1], [42, "G", 1],
+    [43, "H", 1], [44, "J", 1], [45, "K", 1], [46, "L", 1], [47, ";", 1], [48, "'", 1],
+    [51, "\\", 1], [36, "", 1.25, true]
+  ],
+  [
+    [50, "Shift", 1.25], [94, "<", 1], [52, "Z", 1], [53, "X", 1], [54, "C", 1], [55, "V", 1],
+    [56, "B", 1], [57, "N", 1], [58, "M", 1], [59, ",", 1], [60, ".", 1], [61, "/", 1],
+    [62, "Shift", 2.75]
+  ],
+  ANSI[4]
+]
+
+var LAYOUT = ANSI
+var FORMS = ["auto", "ansi", "iso"]
+
+function normalizeForm(value) {
+  var text = String(value || "auto").toLowerCase()
+  return FORMS.indexOf(text) === -1 ? "auto" : text
+}
+
+// The shape of the board, which no keymap states: <LSGT> is defined for every
+// layout whether or not the keyboard has the key. A variant that names its
+// shape is believed. Otherwise plain us is the ANSI board it is sold on, and
+// every other layout is assumed to be on the ISO board most of them ship with.
+// The form setting overrides all of that for the keyboards this gets wrong.
+function keyboardForm(setting, keyboard) {
+  var chosen = normalizeForm(setting)
+  if (chosen !== "auto") return chosen
+  var variant = String((keyboard && keyboard.variant) || "").split(",")[0]
+  if (/(^|_)iso(_|$)/.test(variant)) return "iso"
+  if (/(^|_)ansi(_|$)/.test(variant)) return "ansi"
+  var layout = String((keyboard && keyboard.layout) || "us").split(",")[0]
+  return layout === "us" || layout === "" ? "ansi" : "iso"
+}
+
+function layoutFor(form) {
+  return form === "iso" ? ISO : ANSI
+}
+
+function isTail(key) {
+  return key[3] === true
+}
 
 var ROW_UNITS = 15
 
@@ -132,12 +187,19 @@ function parseKeymap(text) {
 
 function labelFor(code, keymapLabels) {
   if (keymapLabels && keymapLabels.hasOwnProperty(code)) return keymapLabels[code]
-  for (var r = 0; r < LAYOUT.length; r++) {
-    for (var k = 0; k < LAYOUT[r].length; k++) {
-      if (LAYOUT[r][k][0] === code) return LAYOUT[r][k][1]
+  var boards = [ANSI, ISO]
+  for (var b = 0; b < boards.length; b++) {
+    for (var r = 0; r < boards[b].length; r++) {
+      for (var k = 0; k < boards[b][r].length; k++) {
+        if (boards[b][r][k][0] === code && !isTail(boards[b][r][k])) return boards[b][r][k][1]
+      }
     }
   }
   return ""
+}
+
+function keyLabel(key, keymapLabels) {
+  return isTail(key) ? "" : labelFor(key[0], keymapLabels)
 }
 
 function chordLabelFor(code, keymapLabels) {
@@ -154,10 +216,13 @@ function rowUnits(row) {
   return Math.round(total * 100) / 100
 }
 
-function keyCodes() {
+function keyCodes(layout) {
+  var rows = layout || LAYOUT
   var out = []
-  for (var r = 0; r < LAYOUT.length; r++) {
-    for (var k = 0; k < LAYOUT[r].length; k++) out.push(LAYOUT[r][k][0])
+  for (var r = 0; r < rows.length; r++) {
+    for (var k = 0; k < rows[r].length; k++) {
+      if (!isTail(rows[r][k])) out.push(rows[r][k][0])
+    }
   }
   return out
 }
@@ -465,6 +530,14 @@ function layoutName(keyboard, override) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     LAYOUT: LAYOUT,
+    ANSI: ANSI,
+    ISO: ISO,
+    FORMS: FORMS,
+    normalizeForm: normalizeForm,
+    keyboardForm: keyboardForm,
+    layoutFor: layoutFor,
+    isTail: isTail,
+    keyLabel: keyLabel,
     isTypedKeyboard: isTypedKeyboard,
     eventKeyboardName: eventKeyboardName,
     ROW_UNITS: ROW_UNITS,

@@ -179,6 +179,7 @@ Item {
           + ", " + w.order + ", " + w.position
           + ", layout " + (w.detectedLayout === "" ? "unknown" : w.detectedLayout)
           + " from " + (root.keyboard ? root.keyboard.name : "no keyboard")
+          + ", board " + w.form
           + ", feed " + (root.feedInstalled ? "installed" : "not installed")
       })
     }
