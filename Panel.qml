@@ -1,9 +1,12 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -44,7 +47,7 @@ Panel {
     ? Hyprland.focusedMonitor.name === root.screenName
     : false
 
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
@@ -413,12 +416,13 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             visible: !root.feedInstalled
             text: "The key feed is not wired into Hyprland yet. Run bin/keyfeed-install from the plugin folder."
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
-            color: Color.urgent
+            color: Commons.Color.urgent
             wrapMode: Text.WordWrap
           }
 
@@ -471,18 +475,19 @@ Panel {
             description: "While this is on, every key you press lights up on screen, including in other windows."
             checked: root.map
             foreground: root.foreground
-            accent: Color.accent
+            accent: Commons.Color.accent
             fontFamily: root.fontFamily
             onClicked: root.setMap(!root.map)
           }
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             visible: root.strip === "all"
             text: "Everything mode puts each key you type on screen, including into password fields."
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
-            color: Color.urgent
+            color: Commons.Color.urgent
             wrapMode: Text.WordWrap
           }
 
@@ -613,6 +618,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             text: "Layout: " + (root.detectedLayout === "" ? "detecting" : root.detectedLayout)
               + (root.forceQwerty ? "  (forced qwerty)" : "")

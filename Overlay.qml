@@ -1,10 +1,12 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
-import qs.Ui
+import qs.Commons as Commons
 import "Model.js" as Model
 
 Item {
@@ -48,6 +50,11 @@ Item {
   readonly property bool showing: root.showStrip || root.showMap
   readonly property real unit: Math.round(Style.space(26) * root.mapScale)
   readonly property real gap: Math.max(2, Math.round(root.unit * 0.08))
+
+  // Style.duration arrived after Omarchy 4.0.6; it is 0 with animations off.
+  function motion(ms) {
+    return typeof Style.duration === "function" ? Style.duration(ms) : ms // qmllint disable missing-property
+  }
 
   function open(payloadJson) {
     root.opened = true
@@ -242,10 +249,9 @@ Item {
         x: stack.edge
         width: parent.width - stack.edge * 2
 
-        anchors.verticalCenter: window.vertical === "middle" ? parent.verticalCenter : undefined
-        anchors.bottom: window.vertical === "bottom" ? parent.bottom : undefined
-        anchors.top: window.vertical === "top" ? parent.top : undefined
-        anchors.margins: stack.edge
+        y: window.vertical === "top" ? stack.edge
+          : window.vertical === "bottom" ? parent.height - stack.height - stack.edge
+          : (parent.height - stack.height) / 2
         spacing: Style.spacing.md
 
         // The strip and the map are the same two children in either order, so
@@ -287,9 +293,9 @@ Item {
       implicitWidth: chips.implicitWidth + Style.spacing.panelPadding * 2
       implicitHeight: chips.implicitHeight + Style.spacing.md * 2
       radius: Style.cornerRadius
-      color: Color.menu.background
+      color: Commons.Color.menu.background
       border.width: Math.max(1, Style.space(2))
-      border.color: Color.menu.border
+      border.color: Commons.Color.menu.border
 
       Row {
         id: chips
@@ -305,17 +311,18 @@ Item {
             implicitWidth: chipText.implicitWidth + Style.spacing.lg * 2
             implicitHeight: chipText.implicitHeight + Style.spacing.sm * 2
             radius: Style.cornerRadius
-            color: Color.menu.selectedBackground
+            color: Commons.Color.menu.selectedBackground
             border.width: 1
-            border.color: Qt.darker(Color.menu.text, 2.2)
+            border.color: Qt.darker(Commons.Color.menu.text, 2.2)
 
             Text {
               id: chipText
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: Model.displayText(parent.modelData)
               font.family: Style.font.menuFamily
               font.pixelSize: Style.font.heading
-              color: Color.menu.text
+              color: Commons.Color.menu.text
             }
           }
         }
@@ -330,9 +337,9 @@ Item {
       implicitWidth: keyRows.implicitWidth + Style.spacing.md * 2
       implicitHeight: keyRows.implicitHeight + Style.spacing.md * 2 + caption.implicitHeight
       radius: Style.cornerRadius
-      color: Color.menu.background
+      color: Commons.Color.menu.background
       border.width: Math.max(1, Style.space(2))
-      border.color: Color.menu.border
+      border.color: Commons.Color.menu.border
 
       Column {
         id: keyRows
@@ -362,20 +369,21 @@ Item {
                 width: root.unit * units + root.gap * (units - 1)
                 height: root.unit
                 radius: Math.max(2, Math.round(root.unit * 0.12))
-                color: held ? Color.accent : Color.menu.selectedBackground
+                color: held ? Commons.Color.accent : Commons.Color.menu.selectedBackground
                 border.width: 1
-                border.color: held ? Color.accent : Qt.darker(Color.menu.text, 2.4)
+                border.color: held ? Commons.Color.accent : Qt.darker(Commons.Color.menu.text, 2.4)
 
                 Behavior on color {
-                  ColorAnimation { duration: 60 }
+                  ColorAnimation { duration: root.motion(60) }
                 }
 
                 Text {
+                  textFormat: Text.PlainText
                   anchors.centerIn: parent
                   text: Model.labelFor(parent.code, root.keymapLabels)
                   font.family: Style.font.menuFamily
                   font.pixelSize: Math.max(8, Math.round(root.unit * 0.34))
-                  color: parent.held ? Color.menu.background : Color.menu.text
+                  color: parent.held ? Commons.Color.menu.background : Commons.Color.menu.text
                   elide: Text.ElideRight
                   width: parent.width - Style.spacing.xs * 2
                   horizontalAlignment: Text.AlignHCenter
@@ -388,13 +396,14 @@ Item {
 
       Text {
         id: caption
+        textFormat: Text.PlainText
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Style.spacing.xs
         text: root.forceQwerty ? root.keymapName + "  (forced qwerty)" : root.keymapName
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.caption
-        color: Qt.darker(Color.menu.text, 1.8)
+        color: Qt.darker(Commons.Color.menu.text, 1.8)
       }
     }
   }
