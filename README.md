@@ -66,6 +66,8 @@ thing to reach for before typing a password on a shared screen.
 
 ## Install
 
+Listed on the [Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.html?id=sterre.keyboard-hud).
+
 ```sh
 omarchy plugin add https://github.com/sterre-g/omarchy-keyboard-hud.git --enable
 omarchy plugin enable sterre.keyboard-hud --section right
@@ -173,9 +175,8 @@ produce different labels for the same keycodes.
 ## Development
 
 ```sh
-./run-tests
+./run-tests       # node, lua, the installer, omarchy plugin validate, Qt 6 qmllint
 ./dev-sync
-omarchy plugin validate ~/.config/omarchy/plugins/sterre.keyboard-hud
 omarchy-shell shell rescanPlugins
 ```
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+plugin_dir=.
 
 node test/model.test.js
 
@@ -26,3 +27,36 @@ else
 fi
 
 ./test/keyfeed-install.test.sh
+
+# The manifest against the installed shell's schema, then Qt 6's qmllint with
+# the shell's qs.* modules on the import path. /usr/bin/qmllint is Qt 5's and
+# passes files it cannot read.
+if command -v omarchy >/dev/null; then
+  omarchy plugin validate "$plugin_dir"
+  echo "omarchy plugin validate: ok"
+else
+  echo "no omarchy command, skipping omarchy plugin validate" >&2
+fi
+
+qmllint=/usr/lib/qt6/bin/qmllint
+shell_dir="${OMARCHY_PATH:-/usr/share/omarchy}/shell"
+if [ -x "$qmllint" ] && [ -d "$shell_dir/Commons" ]; then
+  lint_root="$(mktemp -d)"
+  mkdir "$lint_root/qs"
+  for module in Commons Ui services; do ln -s "$shell_dir/$module" "$lint_root/qs/$module"; done
+  "$qmllint" -I "$lint_root" "$plugin_dir"/*.qml > "$lint_root/lint.log" 2>&1 || true
+  # Two warnings belong to the shell rather than the plugin: Style and the bar
+  # group their members in untyped QtObjects, and Quickshell's type info marks
+  # PanelWindow uncreatable although every shell surface is one.
+  findings="$(grep -E '^(Warning|Error)' "$lint_root/lint.log" \
+    | grep -vE 'not found on type "QObject"|Type PanelWindow is not creatable' || true)"
+  rm -rf "$lint_root"
+  if [ -n "$findings" ]; then
+    printf '%s\n' "$findings" >&2
+    echo "qmllint: warnings above" >&2
+    exit 1
+  fi
+  echo "qmllint: clean"
+else
+  echo "no Qt 6 qmllint or Omarchy shell, skipping qmllint" >&2
+fi
