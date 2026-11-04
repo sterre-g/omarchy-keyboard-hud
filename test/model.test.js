@@ -248,6 +248,49 @@ run("the keyboard to follow is a real one, not the input method's virtual pair",
   assert.equal(M.pickKeyboard(null), null)
 })
 
+// A laptop with a split keyboard plugged in, as `hyprctl -j devices` lists it:
+// buttons and USB side interfaces first, two keyboards with different layouts.
+const SEAT = [
+  { name: "video-bus", layout: "us", variant: "", main: false },
+  { name: "power-button", layout: "us", variant: "", main: false },
+  { name: "ite-tech.-inc.-ite-device(8910)-wireless-radio-control", layout: "us", variant: "colemak_dh_wide_iso", main: false },
+  { name: "at-translated-set-2-keyboard", layout: "us", variant: "colemak_dh_wide_iso", main: false },
+  { name: "keebart-corne_choc_pro-consumer-control", layout: "us", variant: "", main: false },
+  { name: "keebart-corne_choc_pro-keyboard", layout: "us", variant: "", main: true }
+]
+
+run("buttons and side interfaces are not keyboards anyone types on", () => {
+  for (const name of ["power-button", "power-button-1", "sleep-button", "lid-switch", "video-bus-1",
+    "hl-virtual-keyboard-fcitx5", "asus-wmi-hotkeys", "keebart-corne_choc_pro-consumer-control",
+    "keebart-corne_choc_pro-system-control", "keebart-corne_choc_pro-mouse",
+    "ite-tech.-inc.-ite-device(8910)-wireless-radio-control"]) {
+    assert.equal(M.isTypedKeyboard(name), false, name)
+  }
+  for (const name of ["at-translated-set-2-keyboard", "keebart-corne_choc_pro-keyboard", "logitech-mx-keys"]) {
+    assert.equal(M.isTypedKeyboard(name), true, name)
+  }
+})
+
+run("the keyboard a layout switch named wins, then the one last typed on", () => {
+  assert.equal(M.pickKeyboard(SEAT, "at-translated-set-2-keyboard").name, "at-translated-set-2-keyboard")
+  assert.equal(M.pickKeyboard(SEAT, "").name, "keebart-corne_choc_pro-keyboard")
+  assert.equal(M.pickKeyboard(SEAT, "unplugged-since").name, "keebart-corne_choc_pro-keyboard")
+  assert.equal(M.pickKeyboard(SEAT, "power-button").name, "keebart-corne_choc_pro-keyboard")
+
+  const buttonIsMain = SEAT.map(kb => Object.assign({}, kb, { main: kb.name === "power-button" }))
+  assert.equal(M.pickKeyboard(buttonIsMain).name, "at-translated-set-2-keyboard")
+})
+
+run("the activelayout event yields its keyboard, or nothing for an untyped one", () => {
+  const parsed = { name: "activelayout", data: "at-translated-set-2-keyboard,English (US, intl.)",
+    parse: n => ["at-translated-set-2-keyboard", "English (US, intl.)"].slice(0, n) }
+  assert.equal(M.eventKeyboardName(parsed), "at-translated-set-2-keyboard")
+  assert.equal(M.eventKeyboardName({ data: "keebart-corne_choc_pro-keyboard,English (US)" }), "keebart-corne_choc_pro-keyboard")
+  assert.equal(M.eventKeyboardName({ data: "hl-virtual-keyboard-fcitx5,English (US)" }), "")
+  assert.equal(M.eventKeyboardName({ data: "x", parse: () => { throw new Error("old binding") } }), "x")
+  assert.equal(M.eventKeyboardName(null), "")
+})
+
 run("forcing qwerty overrides the detected layout, and off restores it", () => {
   const keyboard = { name: "kb", layout: "us", variant: "colemak_dh_wide_iso" }
 

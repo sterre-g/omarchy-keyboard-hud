@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
@@ -39,10 +38,12 @@ Item {
   property string overrideVariant: ""
   property bool forceQwerty: false
 
-  // Labels come from the keymap the user actually has loaded, so the map reads
-  // colemak on a colemak machine without shipping a table per layout.
+  // The service picks the keyboard for the whole shell; this compiles its
+  // keymap. Labels come from the keymap the user actually has loaded, so the
+  // map reads colemak on a colemak machine without a table per layout.
+  property var service: null
+  readonly property var keyboard: root.service ? root.service.keyboard : null
   property var keymapLabels: ({})
-  property var keyboard: null
   property string keymapName: ""
 
   readonly property bool showStrip: root.strip !== "off" && root.history.length > 0
@@ -84,7 +85,7 @@ Item {
       root.overrideLayout = nextLayout
       root.overrideVariant = nextVariant
       root.forceQwerty = nextQwerty
-      root.detectLayout()
+      root.compileKeymap()
     }
 
     if (!root.map) root.down = []
@@ -106,22 +107,42 @@ Item {
     return Model.overrideFrom(root.forceQwerty, root.overrideLayout, root.overrideVariant)
   }
 
-  function detectLayout() {
-    if (!devices.running) devices.running = true
-  }
+  // A switch while a compile is still running is picked up when it ends, since
+  // a running Process cannot be restarted with a new command.
+  property bool compileAgain: false
 
-  function adoptDevices(raw) {
-    var data = Model.parseBounded(raw, "devices")
-    if (!data) return
-    root.keyboard = Model.pickKeyboard(data && data.keyboards ? data.keyboards : [])
+  function compileKeymap() {
+    if (keymap.running) {
+      root.compileAgain = true
+      return
+    }
     root.keymapName = Model.layoutName(root.keyboard, root.overrideSpec())
     keymap.command = Model.keymapCommand(root.keyboard, root.overrideSpec())
     keymap.running = true
   }
 
+  function resolveService() {
+    if (root.service || !root.shell || typeof root.shell.serviceFor !== "function") return
+    root.service = root.shell.serviceFor((root.manifest && root.manifest.id) || "sterre.keyboard-hud")
+  }
+
+  onKeyboardChanged: root.compileKeymap()
+
   Component.onCompleted: {
     if (root.paths.dir !== "") stateDir.running = true
-    root.detectLayout()
+    root.compileKeymap()
+  }
+
+  onShellChanged: root.resolveService()
+
+  // serviceFor() is a plain function, so a binding would never see the service
+  // arrive; poll until it has.
+  Timer {
+    interval: 250
+    repeat: true
+    running: root.service === null
+    triggeredOnStart: true
+    onTriggered: root.resolveService()
   }
 
   Process {
@@ -131,17 +152,6 @@ Item {
       if (exitCode !== 0) return
       root.feedPath = root.paths.feed
       root.configPath = root.paths.config
-    }
-  }
-
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      if (!event || !event.name) return
-      var name = String(event.name)
-      // A kb_variant changed in the config reloads rather than raising a layout
-      // switch, so both events have to re-read the keymap.
-      if (name.indexOf("activelayout") !== -1 || name === "configreloaded") root.detectLayout()
     }
   }
 
@@ -162,35 +172,24 @@ Item {
   }
 
   Process {
-    id: devices
-    command: ["hyprctl", "-j", "devices"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.adoptDevices(text)
-    }
-    onRunningChanged: deviceDeadline.running = devices.running
-  }
-
-  Process {
     id: keymap
     command: ["xkbcli", "compile-keymap", "--layout", "us"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.keymapLabels = Model.parseKeymap(text)
     }
-    onRunningChanged: keymapDeadline.running = keymap.running
+    onRunningChanged: {
+      keymapDeadline.running = keymap.running
+      if (!keymap.running && root.compileAgain) {
+        root.compileAgain = false
+        root.compileKeymap()
+      }
+    }
   }
 
   // waitForEnd holds the output until the process closes stdout, so one that
-  // hangs is a collector that never finishes. Both of these are asked for on
-  // every layout switch, so a hung one would also pile up. Give each five
-  // seconds and then take it back.
-  Timer {
-    id: deviceDeadline
-    interval: 5000
-    onTriggered: if (devices.running) devices.signal(15)
-  }
-
+  // hangs is a collector that never finishes, and a layout switch while it
+  // hangs could never be compiled. Give it five seconds and then take it back.
   Timer {
     id: keymapDeadline
     interval: 5000

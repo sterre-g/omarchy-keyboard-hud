@@ -385,21 +385,47 @@ function overrideFrom(forceQwerty, layout, variant) {
   return { layout: name, variant: String(variant || "") }
 }
 
-// Which keyboard the labels should follow. The main device is often a virtual
-// keyboard belonging to an input method, which carries no variant, so a real
-// device with a variant is the better answer when there is one.
-function pickKeyboard(keyboards) {
-  var list = Array.isArray(keyboards) ? keyboards : []
-  var best = null
-  for (var i = 0; i < list.length && i < 64; i++) {
-    var kb = list[i]
-    if (!kb || !kb.name) continue
-    if (String(kb.name).indexOf("hl-virtual-keyboard") === 0) continue
-    if (kb.variant) return kb
-    if (best === null) best = kb
+// Hyprland lists more than keyboards as keyboards: an input method's virtual
+// keyboard, the power button, the lid switch, and the media and mouse
+// interfaces a USB keyboard or mouse brings along. None of them is typed on, and
+// each carries the seat's layout, so following one draws the wrong board. After
+// Omarchy's own KeyboardLayoutModel.isTypedKeyboard, plus the interface names a
+// USB keyboard adds beside its typing one.
+var UNTYPED_KEYBOARDS = /^(hl-virtual-keyboard|power-button|sleep-button|lid-switch|video-bus)|(-wmi-hotkeys|-wireless-radio-control|-consumer-control|-system-control|-mouse)(-\d+)?$/
+
+function isTypedKeyboard(name) {
+  return !UNTYPED_KEYBOARDS.test(String(name || ""))
+}
+
+// activelayout names the keyboard that switched, then the layout. Quickshell
+// splits the fields itself so a layout name with a comma stays whole; a binding
+// without parse() gets the raw string.
+function eventKeyboardName(event) {
+  var parts = null
+  try {
+    if (event && typeof event.parse === "function") parts = event.parse(2)
+  } catch (e) {
+    parts = null
   }
-  if (best) return best
-  return list.length > 0 ? list[0] : null
+  if (!parts) parts = String(event && event.data ? event.data : "").split(",")
+  var name = String(parts[0] || "")
+  return isTypedKeyboard(name) ? name : ""
+}
+
+// Which keyboard the labels follow: the one a layout switch last named, then
+// the one Hyprland marks main, which is the one last typed on, then one with a
+// variant set, since a keyboard somebody configured is the likelier one to be
+// in use. Devices nobody types on are only a last resort.
+function pickKeyboard(keyboards, namedByEvent) {
+  var list = Array.isArray(keyboards) ? keyboards.slice(0, 64) : []
+  var typed = list.filter(function (kb) { return kb && kb.name && isTypedKeyboard(kb.name) })
+  var named = String(namedByEvent || "")
+  var pick = (named !== "" && typed.filter(function (kb) { return kb.name === named })[0])
+    || typed.filter(function (kb) { return kb.main === true })[0]
+    || typed.filter(function (kb) { return !!kb.variant })[0]
+    || typed[0]
+    || list[0]
+  return pick || null
 }
 
 // The layout and variant come out of `hyprctl -j devices`, which reports what
@@ -439,6 +465,8 @@ function layoutName(keyboard, override) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     LAYOUT: LAYOUT,
+    isTypedKeyboard: isTypedKeyboard,
+    eventKeyboardName: eventKeyboardName,
     ROW_UNITS: ROW_UNITS,
     MODIFIERS: MODIFIERS,
     MOD_ORDER: MOD_ORDER,

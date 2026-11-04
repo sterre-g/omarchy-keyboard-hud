@@ -26,19 +26,22 @@ Panel {
   property string position: Model.normalizePosition(root.setting("position", "bottom"))
   property real mapScale: Model.normalizeScale(root.setting("scale", 1))
   property bool forceQwerty: Model.normalizeBool(root.setting("qwerty", false))
-  property bool feedInstalled: false
   property bool settingsArrived: false
   property bool configResolved: false
   property bool configPresent: false
   readonly property bool settingsApplied: root.settingsArrived && root.configResolved
-  property string detectedLayout: ""
 
   readonly property bool anythingOn: root.strip !== "off" || root.map
 
-  // An IPC target admits one handler and this widget exists once per monitor,
-  // so the target lives in Service.qml and sends each call to the widget on the
-  // focused monitor.
+  // This widget exists once per monitor, so the IPC target, the feed check and
+  // the keyboard lookup live in Service.qml, once.
   property var service: null
+  readonly property bool feedInstalled: root.service ? root.service.feedInstalled : false
+  readonly property var keyboard: root.service ? root.service.keyboard : null
+  readonly property string detectedLayout: root.keyboard
+    ? Model.layoutName(root.keyboard, Model.overrideFrom(root.forceQwerty,
+        String(root.setting("layout", "")), String(root.setting("variant", ""))))
+    : ""
 
   readonly property string screenName: root.QsWindow.window && root.QsWindow.window.screen
     ? root.QsWindow.window.screen.name
@@ -76,17 +79,13 @@ Panel {
     root.pushFeedConfig()
   }
 
-  // Tell the Hyprland side the two settings that decide whether a keypress is
-  // recorded at all. It used to read them back out of configPath on every key,
-  // which put a callback on the input thread in the position of opening a path
-  // any process running as this user could replace first. Both values are
-  // picked from a fixed set here, so nothing that arrives from outside the
-  // widget reaches the eval.
+  // The Hyprland side used to read these two switches back out of configPath on
+  // every key, which put a callback on the input thread in the position of
+  // opening a path any process running as this user could replace first. The
+  // service pushes them in with hyprctl eval instead.
   function pushFeedConfig() {
-    if (!root.settingsApplied) return
-    var strip = root.strip === "all" || root.strip === "chords" ? root.strip : "off"
-    Quickshell.execDetached(["hyprctl", "eval",
-      "__sterre_keyboard_hud_config(\"" + strip + "\", " + (root.map ? "true" : "false") + ")"])
+    if (!root.settingsApplied || !root.service) return
+    root.service.pushFeedConfig(root.strip, root.map, false)
   }
 
   // Both monitors get their own copy of this widget and both write the config,
@@ -161,7 +160,6 @@ Panel {
   function setQwerty(value) {
     root.forceQwerty = value === true
     root.persist({ qwerty: root.forceQwerty })
-    devices.running = true
   }
 
   function setStrip(value) {
@@ -195,19 +193,6 @@ Panel {
     root.persist({ strip: "off", map: false })
   }
 
-  function checkFeed() {
-    if (!feedProbe.running) feedProbe.running = true
-  }
-
-  function adoptDevices(raw) {
-    var data = Model.parseBounded(raw, "devices")
-    if (!data) return
-    var keyboard = Model.pickKeyboard(data && data.keyboards ? data.keyboards : [])
-    var override = Model.overrideFrom(root.forceQwerty,
-      String(root.setting("layout", "")), String(root.setting("variant", "")))
-    root.detectedLayout = Model.layoutName(keyboard, override)
-  }
-
   // No directory means no config file, so the two answers resolveState() is
   // waiting for become one and the stored settings are the only ones there are.
   function settleWithoutConfig() {
@@ -220,8 +205,6 @@ Panel {
   Component.onCompleted: {
     if (root.paths.dir !== "") stateDir.running = true
     else root.settleWithoutConfig()
-    root.checkFeed()
-    devices.running = true
   }
 
   // Ask for the private directory once, and only start using the config file
@@ -253,19 +236,11 @@ Panel {
   }
 
   onOpenedChanged: if (opened) {
-    root.checkFeed()
-    devices.running = true
-    Qt.callLater(function () { keyCatcher.forceActiveFocus() })
-  }
-
-  // hyprctl reload re-runs the Hyprland config, and a freshly loaded
-  // keyfeed.lua is off until it is told otherwise. Push again, or a reload
-  // leaves the HUD looking installed and drawing nothing.
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      if (event && String(event.name) === "configreloaded") root.pushFeedConfig()
+    if (root.service) {
+      root.service.checkFeed()
+      root.service.detectKeyboard()
     }
+    Qt.callLater(function () { keyCatcher.forceActiveFocus() })
   }
 
   FileView {
@@ -294,52 +269,20 @@ Panel {
     }
   }
 
-  Timer {
-    interval: 15000
-    running: true
-    repeat: true
-    triggeredOnStart: true
-    onTriggered: root.checkFeed()
-  }
-
-  Process {
-    id: feedProbe
-    command: ["grep", "-qF", "sterre.keyboard-hud", Quickshell.env("HOME") + "/.config/hypr/hyprland.lua"]
-    onExited: function (exitCode) { root.feedInstalled = exitCode === 0 }
-  }
-
-  Process {
-    id: devices
-    command: ["hyprctl", "-j", "devices"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.adoptDevices(text)
-    }
-    onRunningChanged: deviceDeadline.running = devices.running
-  }
-
-  // waitForEnd holds the collected output until the process closes its stdout,
-  // so a hyprctl that hangs is a collector that never finishes and a widget
-  // that never learns its layout. Give it five seconds and then take it back.
-  Timer {
-    id: deviceDeadline
-    interval: 5000
-    onTriggered: if (devices.running) devices.signal(15)
-  }
-
   function resolveService() {
     if (root.service || !root.bar || !root.bar.shell) return
     var found = typeof root.bar.shell.serviceFor === "function" ? root.bar.shell.serviceFor(root.moduleName) : null
     if (!found) return
     root.service = found
     root.service.registerWidget(root)
+    root.pushFeedConfig()
   }
 
   onBarChanged: root.resolveService()
   Component.onDestruction: if (root.service) root.service.unregisterWidget(root)
 
-  // The shell creates the service on its own schedule, so a widget built first
-  // has to look again rather than give up.
+  // serviceFor() is a plain function, so a binding would never see the service
+  // arrive; poll until it has.
   Timer {
     interval: 250
     repeat: true

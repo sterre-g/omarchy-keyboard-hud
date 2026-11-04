@@ -130,11 +130,13 @@ lists, so the labels come from the same source Hyprland is using rather than
 from a table per layout shipped in here. A layout switch or a config reload
 re-reads it.
 
-One wrinkle worth knowing: the keyboard Hyprland marks as `main` is often an
-input method's virtual keyboard, which carries no variant. The plugin prefers a
-real device that has one, and you can override both with the `layout` and
-`variant` settings if it still picks wrong. The name of whatever it settled on
-is printed under the map.
+Hyprland lists more than keyboards as keyboards: an input method's virtual
+keyboard, the power button and lid switch, and the media and mouse interfaces a
+USB keyboard brings along. Those are skipped. Of the rest, the plugin follows
+the keyboard the last layout switch named, then the one Hyprland marks `main`,
+which is the one last typed on, then one that has a variant set. You can
+override the result with the `layout` and `variant` settings if it still picks
+wrong. The name of whatever it settled on is printed under the map.
 
 If the keymap cannot be read, the map falls back to US labels rather than
 showing nothing.
@@ -159,12 +161,14 @@ the Hyprland API and includes the symlink case.
 you type into something else, and with an empty input region so it never takes
 a click either. Both matter: it is a full width strip along an edge, so without
 that it would cover whatever the bar has there. [Panel.qml](Panel.qml) is the bar
-widget: it owns the settings, pushes the recording switches to the Lua side, and
-writes the rest to `$XDG_RUNTIME_DIR/sterre-keyboard-hud/config.json` for the
-overlay to pick up, through a rename rather than a truncating write. The widget
-exists once per monitor and an IPC target admits one handler, so
-[Service.qml](Service.qml) owns the target and hands each call to the widget on
-the focused monitor.
+widget: it owns the settings and writes them to
+`$XDG_RUNTIME_DIR/sterre-keyboard-hud/config.json` for the overlay to pick up,
+through a rename rather than a truncating write. The widget exists once per
+monitor, so [Service.qml](Service.qml) holds everything that should happen once:
+the IPC target, which hands each call to the widget on the focused monitor, the
+check that the feed is wired into Hyprland, the keyboard lookup the panel and
+the overlay both read, and the push of the recording switches to the Lua side,
+again after every Hyprland reload.
 
 [Model.js](Model.js) holds the physical layout, the keymap parser, chord
 ordering, repeat collapsing and expiry, and the layout picking. It is covered by
