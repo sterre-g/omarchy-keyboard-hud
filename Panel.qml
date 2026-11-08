@@ -327,13 +327,13 @@ Panel {
       anchors.fill: parent
       onCloseRequested: root.close()
       onTabRequested: function (direction) { root.switchPanel(direction) }
+      onDeleteRequested: root.turnOff()
       onTextKey: function (t) {
         if (t === "c") root.setStrip("chords")
         else if (t === "a") root.setStrip("all")
         else if (t === "s") root.setStrip("off")
         else if (t === "m") root.setMap(!root.map)
         else if (t === "o") root.setOrder(Model.stripAbove(root.order) ? "strip-below" : "strip-above")
-        else if (t === "x") root.turnOff()
         else if (t === "q") root.setQwerty(!root.forceQwerty)
       }
 
