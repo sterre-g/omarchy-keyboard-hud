@@ -80,6 +80,20 @@ The last command appends two lines to `~/.config/hypr/hyprland.lua`, keeps a
 timestamped backup beside it, and reloads Hyprland. Check or undo with
 `bin/keyfeed-install --status` and `--uninstall`.
 
+## Remove
+
+Take the key feed out of the Hyprland config first, while the plugin is still
+there to do it, then remove the plugin:
+
+```sh
+~/.config/omarchy/plugins/sterre.keyboard-hud/bin/keyfeed-install --uninstall
+omarchy plugin remove sterre.keyboard-hud
+```
+
+In the other order, `~/.config/hypr/hyprland.lua` keeps a `dofile` line for a
+file that no longer exists, and Hyprland reports a config error until you
+delete that line and the `-- sterre.keyboard-hud` comment above it by hand.
+
 ## Using it
 
 Left click the bar button for the panel, right click to turn everything off and
