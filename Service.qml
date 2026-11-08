@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import qs.Commons
 import "Model.js" as Model
 
 // One instance for the whole shell. The bar widget exists once per monitor, so
@@ -131,7 +132,7 @@ Item {
     onTriggered: if (devices.running) devices.signal(15)
   }
 
-  IpcHandler {
+  ShellIpc {
     target: "sterre.keyboard-hud"
 
     function open(): void { root.withFocused(function (w) { w.open() }) }

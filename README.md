@@ -66,6 +66,8 @@ thing to reach for before typing a password on a shared screen.
 
 ## Install
 
+Needs Omarchy 4.5 or newer.
+
 Listed on the [Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.html?id=sterre.keyboard-hud).
 
 ```sh

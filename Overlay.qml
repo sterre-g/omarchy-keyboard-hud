@@ -54,11 +54,6 @@ Item {
   readonly property real unit: Math.round(Style.space(26) * root.mapScale)
   readonly property real gap: Math.max(2, Math.round(root.unit * 0.08))
 
-  // Style.duration arrived after Omarchy 4.0.6; it is 0 with animations off.
-  function motion(ms) {
-    return typeof Style.duration === "function" ? Style.duration(ms) : ms // qmllint disable missing-property
-  }
-
   function open(payloadJson) {
     root.opened = true
   }
@@ -376,7 +371,7 @@ Item {
                 border.color: held ? Commons.Color.accent : Qt.darker(Commons.Color.menu.text, 2.4)
 
                 Behavior on color {
-                  ColorAnimation { duration: root.motion(60) }
+                  ColorAnimation { duration: Style.duration(60) }
                 }
 
                 // The lower half of an ISO Enter reaches up through the row gap
